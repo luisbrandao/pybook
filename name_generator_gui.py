@@ -27,8 +27,11 @@ COUNT = 20  # number of names per click
 
 
 def available_chapters():
-    """Return a sorted list of *.txt filenames in the current directory."""
-    return sorted(p.name for p in pathlib.Path('./books').glob('*.txt'))
+    """Return a sorted list of *.txt filenames in the books directory."""
+    books_dir = pathlib.Path('./books')
+    if not books_dir.exists():
+        return []
+    return sorted(p.name for p in books_dir.glob('*.txt'))
 
 
 class NameGenApp(tk.Tk):
@@ -78,7 +81,7 @@ class NameGenApp(tk.Tk):
         if not chapter:
             messagebox.showwarning("No chapter selected", "Please select a chapter file first.")
             return
-        path = pathlib.Path(chapter)
+        path = pathlib.Path('./books') / chapter
         try:
             with path.open(encoding="utf-8") as fh:
                 names = [ln.strip() for ln in fh if ln.strip()]
