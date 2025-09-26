@@ -31,48 +31,54 @@ VOWELS = set("aeiouAEIOUáéíóúÁÉÍÓÚàèìòùÀÈÌÒÙâêîôûÂÊÎ
 def vowel_positions(name: str) -> List[int]:
     return [i for i, ch in enumerate(name) if ch in VOWELS]
 
-
 def split_name(name: str) -> Tuple[str, str, str]:
-    """Return (prefix, middle, suffix) for *name*.
-
-    Vowel‑aware heuristic:
-        • if ≥2 vowels → split at first & last vowel boundaries.
-        • if exactly 1 vowel → keep 1‑char prefix & suffix.
-        • else → fallback to simple length‑ratio heuristic.
     """
-    name = name.strip()
-    n = len(name)
-    if n == 0:
+    Split a name into phonetic syllables: prefix, middle, suffix.
+    
+    Args:
+        name: Input name string
+        
+    Returns:
+        Tuple of (prefix, middle, suffix) strings
+    """
+    if not name:
         return ("", "", "")
-
-    v_pos = vowel_positions(name)
-
-    if len(v_pos) >= 2:
-        first_v, last_v = v_pos[0], v_pos[-1]
-        prefix = name[: first_v + 1]           # include first vowel
-        suffix = name[last_v:]                 # from last vowel
-        middle = name[first_v + 1 : last_v]    # may be empty
-    elif len(v_pos) == 1 and n >= 3:
-        # tiny adjustment: one‑vowel names keep first char as prefix,
-        # last char as suffix.
-        prefix = name[0]
-        suffix = name[-1]
-        middle = name[1:-1]
+    
+    name = name.lower()
+    vowels = set('aeiou')
+    syllables = []
+    i = 0
+    
+    while i < len(name):
+        syllable = ""
+        
+        # Add consonants at the beginning
+        while i < len(name) and name[i] not in vowels:
+            syllable += name[i]
+            i += 1
+        
+        # Add one vowel
+        if i < len(name) and name[i] in vowels:
+            syllable += name[i]
+            i += 1
+        
+        if syllable:
+            syllables.append(syllable)
+    
+    # Convert to the required format
+    if len(syllables) <= 2:
+        prefix = syllables[0] if len(syllables) > 0 else ""
+        suffix = syllables[1] if len(syllables) > 1 else ""
+        middle = ""
+    elif len(syllables) == 3:
+        prefix = syllables[0]
+        middle = syllables[1]
+        suffix = syllables[2]
     else:
-        # fallback percentage split (30 / 20)
-        pref_len = max(1, round(n * 0.30))
-        suff_len = max(1, round(n * 0.20))
-        while pref_len + suff_len >= n:
-            if suff_len > 1:
-                suff_len -= 1
-            elif pref_len > 1:
-                pref_len -= 1
-            else:
-                break
-        prefix = name[:pref_len]
-        suffix = name[-suff_len:]
-        middle = name[pref_len:-suff_len] if pref_len + suff_len < n else ""
-
+        prefix = syllables[0]
+        middle = "".join(syllables[1:-1])
+        suffix = syllables[-1]
+    
     return (prefix, middle, suffix)
 
 

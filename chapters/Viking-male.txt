@@ -1,5 +1,4 @@
 Agnar
-Åge
 Alda
 Alf
 Alvar
@@ -17,7 +16,6 @@ Aslak
 Atle
 Audun
 Balder
-Bård
 Birger
 Bjarke
 Bjarne
@@ -27,12 +25,13 @@ Bjørn
 Bjørnar
 Bodin
 Bodvar
-Børge
-Børre
 Bragi
 Brede
 Brynjar
 Brynjulf
+Bård
+Børge
+Børre
 Dag
 Dagfinn
 Ebbe
@@ -64,8 +63,8 @@ Gudbrand
 Gudmund
 Gunnar
 Gustav
-Hakan
 Haakon
+Hakan
 Halfdan
 Hallgeir
 Halstein
@@ -73,8 +72,6 @@ Halvar
 Hans
 Harald
 Havard
-Håvard
-Hårek
 Helge
 Helgi
 Helje
@@ -84,6 +81,8 @@ Hermod
 Hjalmar
 Holger
 Hrafen
+Hårek
+Håvard
 Ing
 Inge
 Ingolf
@@ -93,12 +92,12 @@ Jarl
 Jarle
 Jerk
 Jomar
-Kåre
 Ketil
 Kjeld
 Kjetil
 Knud
 Knut
+Kåre
 Leif
 Magne
 Magnus
@@ -111,8 +110,6 @@ Odin
 Oluf
 Orm
 Osman
-Øystein
-Øyvind
 Ragnar
 Rangvald
 Ravn
@@ -146,13 +143,13 @@ Torbjørn
 Torkel
 Tormod
 Torodd
-Tørres
 Torsten
 Troels
 Truls
-Trym
 Trygve
+Trym
 Tyrell
+Tørres
 Ulf
 Ullr
 Vebjørn
@@ -160,3 +157,6 @@ Vetle
 Vidar
 Vilhelm
 Yngvar
+Åge
+Øystein
+Øyvind

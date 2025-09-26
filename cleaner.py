@@ -1,52 +1,37 @@
 import os
+import sys
+from pathlib import Path
 
-def clean_ebn_debug():
-    input_file = "ebnDebug.txt"
-    output_file = "chapters/ebnReady.txt"
+def clean_txt_files(directory_path):
+    directory = Path(directory_path)
     
-    # Create the chapters directory if it doesn't exist
-    os.makedirs("chapters", exist_ok=True)
-    
-    # Read the input file
-    try:
-        with open(input_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        print(f"Error: {input_file} not found!")
+    if not directory.exists() or not directory.is_dir():
+        print(f"Error: '{directory_path}' is not a valid directory!")
         return
     
-    # Process the lines
-    cleaned_lines = []
+    txt_files = directory.glob("*.txt")
     
-    for i, line in enumerate(lines):
-        line = line.strip()  # Remove leading/trailing whitespace
-        
-        # Skip the first line (index 0)
-        if i == 0:
-            continue
+    for txt_file in txt_files:
+        try:
+            # Read, clean, deduplicate, and sort
+            with open(txt_file, 'r', encoding='utf-8') as f:
+                lines = [line.strip() for line in f if line.strip()]
             
-        # Skip empty lines
-        if not line:
-            continue
+            # Remove duplicates and sort
+            unique_sorted_lines = sorted(set(lines))
             
-        # Skip lines with dots (…)
-        if '…' in line or '.' in line:
-            continue
+            # Write back
+            with open(txt_file, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(unique_sorted_lines) + '\n')
             
-        # Add valid lines to our cleaned list
-        cleaned_lines.append(line)
-    
-    # Write to output file (this will overwrite if file exists)
-    try:
-        with open(output_file, 'w', encoding='utf-8') as f:
-            for line in cleaned_lines:
-                f.write(line + '\n')
-        
-        print(f"Successfully cleaned file. Output written to {output_file}")
-        print(f"Processed {len(cleaned_lines)} valid lines.")
-        
-    except Exception as e:
-        print(f"Error writing to {output_file}: {e}")
+            print(f"✓ {txt_file.name}: {len(lines)} → {len(unique_sorted_lines)} lines")
+            
+        except Exception as e:
+            print(f"✗ Error with {txt_file.name}: {e}")
 
 if __name__ == "__main__":
-    clean_ebn_debug()
+    if len(sys.argv) != 2:
+        print("Usage: python clean_names.py <directory_path>")
+        sys.exit(1)
+    
+    clean_txt_files(sys.argv[1])
