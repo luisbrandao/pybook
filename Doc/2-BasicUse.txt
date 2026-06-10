@@ -1,0 +1,104 @@
+# Generating names
+Generating Names
+
+EBoN is very easy to use. A brief description of the most commonly accessed controls is given below.
+
+Selects a book, i.e. a collection of chapters.
+(Book)
+Selects a chapter, i.e. a data set for random name generation.
+(Chapter)
+
+Generates a random name.
+(Generate next)
+Generates a list of random names.
+(Generate NN)
+
+Launches this help file.
+(Help)
+When pressed down, shows information about current book or chapter if it exists.
+(Info)
+Expands the program window to show controls that can be used to manage the generated names; or collapses the window to hide them.
+(Expand or Collapse)
+The following keyboard shortcuts can also be used:
+
+Enter	Generate Next
+F1	Help
+Ctrl + ¯	Expand
+Ctrl + ­	Collapse
+Chapter files from version 1.0 are not compatible with this software.
+
+# Managing Name history
+Managing Name History
+
+The names generated in a session are shown in a list box with check boxes beside each name. The list, along with some other controls, allows managing the names.
+
+Saves the checked names in a file.
+(Save Selected)
+Copies the checked names into the Clipboard.
+(Copy Selected)
+Clears the history list.
+(Clear History)
+
+Checks all items.
+(Select All)
+Inverts the state of all items.
+(Invert Selection)
+Unchecks all items.
+(Deselect All)
+
+List Size	Allows setting the number of names generated when Generate NN is clicked.
+RPGStats	Selects the RPG system header for each saved name. This is helpful when a list is used for naming spur-of-a-moment NPCs that need their stats written down. Currently, only D&D is supported.
+Lines	Number of blank extra lines for each saved name. The lines provide space for writing down information about spur-of-a-moment NPCs. 
+The following keyboard shortcuts can also be used:
+
+Ctrl + S	Save Selected
+Ctrl + C	Copy Selected
+Ctrl + X	Clear History
+Ctrl + A	Select All
+Sh + Ctrl + A	Deselect All
+Ctrl + I	Invert Selection
+Double-clicking the current name copies it to the clipboard.
+
+# Customizing Generation
+Customizing Generation
+
+The name generation algorithm of EBoN is quite complex. The controls described on this page allow varying the way the program generates names. By default, these controls are automatically set to a predefined status whenever a chapter is opened, so a regular user may never have to access them.
+
+When EBoN generated a name, it pieces it together from elements. The criteria by which these elements are selected affects the outcome. It is these criteria that are modified when the following controls are used.
+
+InitialLetter	Forces the selection of the initial letter of a name.
+Structural	Causes names to be generated according to structures collected from the original names. This setting has probably the greatest impact upon the quality of the generated names.
+Statistical	Causes elements to be selected according to the frequency of their appearance in the original names.
+Prefixes	Forces the generation of names that contain only such prefixes that appeared in the original names.
+Suffixes	Same as above, for suffixes.
+Fit Lvl	Sets the level of complexity of the criteria used when selecting elements that can be fit together.
+AutomaticOptions	Causes the options to be set automatically when a chapter is opened.
+
+# Troubleshooting
+Troubleshooting
+
+Although ease of use was one of the top priorities when Everchanging Book of Names was designed, it seems that nothing can totally prevent problems from occuring. Before flaming the author, read the questions and answers below.
+
+Q. Why doesn't the program show my chapter in the chapter list?
+
+A. The problem may be caused by three things: 1) You are trying to use v1.0 chapters. They are not compatible with later versions. 2) There is a typing error in the TITLE tag of the chapter in question. Check spelling, quotes and the terminating semicolon. 3) The file extension of your chapter is incorrect - i.e. other than .EBN. If you created the file with Notepad or renamed it with Windows Explorer, its actual name may not be mychapt.ebn although it may seem so. In an Explorer window, select View / Options and click on the View tab. If the "Hide MS-DOS file extensions..." checkbox is checked, uncheck it and click OK. Now Windows will be showing file names correctly and you can fix the problem.
+
+Q. Why doesn't the program show my book in the book list?
+
+A. You must have a file named book.dat with four lines of text in the book folder in order to have it recognized.
+
+Q. I can't save my chapter file as .ebn! It always gets this .txt suffix.
+
+A. See the answer to the first question.
+
+Q. Why does the program only generate a few names and then closes the chapter?
+
+A. The chapter you are using hasn't been unlocked. Refer to Unlocking a Chapter for further information.
+
+Q. What's the use of those .qch files appearing in the EBoN folder? 
+
+A. QCH stands for Quick Chapter. These files are used by EBoN to speed up subsequent openings.
+
+Q. The program hangs or keeps crashing. Why? 
+
+A. I suppose you didn't try to edit those .qch files yourself? If not, I honestly don't have a clue. A complete description of the situation causing the problem might be useful, especially when mailed to the author.

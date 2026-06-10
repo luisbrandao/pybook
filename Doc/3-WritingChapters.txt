@@ -1,0 +1,369 @@
+# Understanding the Algorithm
+
+Understanding the Algorithm
+
+EBoN creates names by making random choices, all the while following a strict set of rules. A file that contains a name list as well as the rules for creating new names is called a chapter.
+
+A basic understanding of the name generation algorithm is necessary when custom chapters are being created.
+
+
+EBoN must preprocess the original names that are used as seed when generating new ones before they can be used by the generation algorithm. This is done when a chapter is opened. The process can be roughly divided into four steps. In the following, THRANDUIL is used as an example of a name. Note that all names are initially converted to uppercase by the program.
+
+1.	Marking special letters
+
+As an example, special letters may include soft consonants such as TH. Soft consonants are replaced with lower case letters. Thus, after this step our example would be spelt as tRANDUIL. There is a great number of other possible special letters.
+2.	Splitting the names
+
+Original names are split into elements. There are two types of these: vowelic and consonantal, both containing letters of that category only. Our example would be split as tR-A-ND-UI-L.
+3.	Gathering generation data
+
+a) Three levels of information for fitting the elements together are stored. Vowels are always fit as whole elements but consonants only as single letters. In the above example, the program would know after this phase that R-A, A-N, D-UI and UI-L are allowed level 1 combinations. Furthermore, R-*-N and D-*-L would be noted as possible level 2 combinations and A-*-UI as a possible level 3 combination. Thus, level 2 only concerns consonants, ignoring the vowels(s) between them, and level 3 similarly only vowels.
+
+b) Prefixes and suffixes are stored. A prefix is a two-element combination that begins a name; in our example it is tR-A. Similarly, the suffix is UI-L.
+
+c) Name structures are stored. A structure specifies the basic form of the name. The above example has the structure CVCVC, which means that it starts with a consonantal element (tR), followed by a vowelic one (A), and so on until it ends in a consonantal element (L). Moreover, the name's substructure is 21221, which specifies the lengths of its elements (tR = 2, A = 1, ...).
+
+d) Statistical information about element and structure frequencies is stored.
+4.	Gathering validation data
+
+Validation data is used to eliminate generated names that would probably be rejected by the user. Maximum relative frequencies and minimum repetition distances for letters are stored.
+The elements and the way they are put together are peculiar to a language. The data collected in the above steps is used to make sure that generated names have the feel of the original language. Not all of the data needs to be used when generating names - it is actually the amount of data used that is being varied when tampering with the generation options.
+
+Once a name is successfully generated and validated it is postprocessed. In this phase it is punctuated and its case is corrected so that only the first letter is in uppercase.
+
+Some names may actually consist of several names and other data. Such names are formed by using templates.
+
+# Starting Chapter creation
+
+Starting Chapter Creation
+
+EBoN introduces two new file name extensions: .EBN and .QCH. Of these, the first one is the most important, as each EBN file defines a chapter. Because proper use of these extensions is essential, you are advised to make Windows show all file extensions. How this is done is described below:
+
+1.	Open your EBoN directory with 'Windows Explorer'. 
+2.	Select 'View' from the menu bar. 
+3.	Select 'Options' (Win95) or 'Folder Options' (Win98). A new dialog appears. 
+4.	Select 'View' tab from the dialog. 
+5.	Make sure that 'Hide file extensions for known file types' is unchecked. 
+6.	Click 'Ok'. 
+Now Windows will be showing file names correctly.
+
+An EBN file is a simple text file. In this package is a file called template.txt, which can be used as a base for building a new chapter. Make a copy of it, and rename the copy to mychapt.ebn, where 'mychapt' is can be any name you want to give to your chapter file. Keep mychapt.ebn in your EBoN directory. Your chapter will then appear in a book called 'Unbound'.
+
+Examples
+
+The best way to learn is often by following an example. There are four examples of writing a chapter in this help file, each of which will take you further into the subject. Note, however, that you only have to read through Case 1 to be able to write a chapter. The rest of the examples only add to your knowledge.
+
+# Case Study #1: Basic feature
+
+Case Study #1: Basic Features
+
+The following text is an excerpt from a fully functional chapter file. It consists of several lines in the form TAG = "...". The quotes are there to hold data between them, and TAG tells where to use it. Each data block enclosed in quotes must end in a semicolon.
+
+TITLE  = "Anglo-Saxon";
+LINE1  = "Medieval names from";
+LINE2  = "Anglo-Saxon Britain";
+AUTHOR = "Sami Pyörre";
+DATE   = "12-Feb-2000";
+
+GENOPT = "structgen,statgen,fit:3,
+val:2,prefix,suffix,shuffle";
+
+NAMES = "Abercorn","Acca","Ælfgar",
+
+<!- names omitted >
+
+"Willehad","Wulfric","Wulfstan";
+
+In the end, your very own EBoN chapter will be very similar to this one.
+
+Identifiers
+
+The first tag, TITLE, tells the name of the chapter as it will appear in the Chapter drop-down menu. Each of the following two tags, LINE1 and LINE2, defines an identifying line of text that is shown when a chapter is opened. AUTHOR obviously identifies the author of the chapter that will also be shown. Finally, DATE tells the chapter version, usually written in the form of date.
+
+Generation Options
+
+The GENOPT tag defines the default settings for the controls described in Customizing Generation. As you will remember, they can be changed by a user when generating names. Most people will never do so - they shouldn't have to! - so the options that are set here should be selected carefully as they have a great impact on name quality.
+
+structgen	Causes EBoN to use substructures, i.e. makes sure that each generated name has the same subsequent element lengths as one of the original seed names. This option is essential to create good names. You should only omit it if your chapter has very few names - less than 50 being a good rule of a thumb.
+statgen	Causes EBoN to select elements and structures by their number of appearing among the seed names. Again, only omit this option if your chapter has very few names.
+fit:N	Specifies the fitting level to use when selecting an element. N can be one of 0, 1, 2 or 3, where 0 means that no fitting is done, and a higher number means better name quality. High name quality always has a cost, however, as setting more constraints to element selection reduces the number of possibilities.
+
+There are two factors to consider when selecting a value for N: the number of seed names in the chapter, and the number of syllables in various parts of the name. The names in our example break into parts and syllables as follows: ABER-CORN, having two syllables (A and BER) in the first part and one (CORN) in the second; ACCA, having two syllables (AC and CA) in its only part; ÆLF-GAR, having one syllable in both of its parts (ÆLF in the first, GAR in the second); and so on. The following guidelines can be used when selecting an appropriate fitting level:
+
+3. Use this level when most of the names consist of parts with several syllables in each. If the number of seed names is very large (i.e. over 500), this level should always be used.
+
+2. Use this level when most of the names consist of monosyllablic parts.
+
+1. Use this level when the number of names is small (i.e. below 50).
+
+0. Use this level when the number of names is non-existant (i.e. below 30). Generally, chapters with less than 30 names will never perform well.
+
+In our example, levels 2 and 3 are both good choices when the number of syllables in name parts are considered.
+
+When this option is omitted, EBoN uses a default value of 3.
+val:N	Specifies the level of validation, i.e. the complexity of criteria used when deciding whether a name should be discarded. N should almost always be set to 2. Only a chapter with a very small number of names should use level 1 or even level 0.
+
+When this option is omitted, EBoN uses a default value of 2.
+prefix	Causes EBoN to select the two first elements of a name from a pool of prefixes that appear in the seed names. In our example, the prefix pool consists of A-B, A-CC, Æ-LFG, ..., W-I, and W-U. Using this option makes better names, but once again reduces the number of choices. Generally, include this option in GENOPT if the number of seed names is over 300.
+suffix	Causes EBoN to select the two last elements of a name from a pool of suffixes that appear in the seed names. Better names, less choices; use if the number of seed names is over 200.
+shuffle	Causes EBoN to put all the elements into a common pool instead of selecting them by their location in the seed names. This adds to variation and allows occurence of names that would otherwise not appear at all. This is both good and bad, as the "extras" may not be as good as the rest of the names. Use this option if the number of seed names is small, say less than 100.
+The above GENOPT options setup is not carved in stone. When trying out your chapter for the first time, try selecting different options using the generation options controls in the program interface to find out the optimal combination. Only validation level can not be set when using the software.
+
+Names
+
+The NAMES tag, finally, holds the seed names. Each of them is held between quotes and separated with a comma. The following characters are allowed in names:
+
+BCDFGHJKLMNPQRSTVWXZÇÐÑÞŠ-
+AEIOUYÄËÏÖÜŸÁÉÍÓÚÝÂÊÎÔÛÀÈÌÒÙÃÕÅÆØŒ'
+
+In the above, the first line consists of consonants and the second of vowels. No name with only consonants or vowels is allowed.
+
+Outcome
+
+If you followed the above instructions strictly, your chapter should now work. Try opening it in EBoN -- you should find it in a book called Unbound. If something goes wrong, you'll either get an error message, or your chapter doesn't appear in EBoN at all. If all is well, you can either start honing the chapter, or add more features to it by familiarizing yourself with the other case studies.
+
+# Case Study #2: Special letters
+
+Case Study #2: Special Letters
+
+The following text is a slightly modified version of the example presented in case 1 with added SPCCON and SPCVOW tags.
+
+TITLE  = "Anglo-Saxon";
+LINE1  = "Medieval names from";
+LINE2  = "Anglo-Saxon Britain";
+AUTHOR = "Sami Pyörre";
+DATE   = "12-Feb-2000";
+
+SPCCON = "soft,<LF>";
+SPCVOW = "multi";
+
+GENOPT = "structgen,statgen,fit:2,
+val:2,prefix,suffix";
+
+NAMES = "Abercorn","Acca","Ælfgar",
+
+<!- names omitted >
+
+"Willehad","Wulfric","Wulfstan";
+
+As you remember, EBoN breaks the names in the seed name list into vowelic and consonantal elements. You will also remember that there is a difference between these element types when fitting is considered: a vowelic element is fitted as an entity, while consonants are fitted as letters.
+
+Special Consonants
+
+Using the SPCCON tag, EBoN can be fooled to treat some consonant clusters as single letters. When reading the following, keep in mind that the first thing EBoN does when a new chapter is opened is converting all the names to uppercase letters.
+
+The most important SPCCON tag option is soft. When it is included in the tag, EBoN treats every consonant that has the letter H  after it as a single letter. Thus, BH, CH, DH, ..., ZH are all valid soft consonants. The only exception to this rule is the letter H itself: HH is not treated in this way.
+
+Besides soft, you can specify up to ten special consonant clusters in SPCCON. This is done by putting a consonant cluster between braces. That cluster will then be treated as a single letter.
+
+Note that if soft is present in the tag data, it is always handled first. EBoN does this by replacing any soft consonants in the original (uppercase) names with lowercase letters. You will have to use capital letters in the consonant clusters between braces, and mark soft consonants with lowercase letters in those clusters yourself. Example: Suppose you have written the SPCCON tag as follows:
+
+	SPCCON = "soft, <LTH>";
+
+The name WALTHEOF is first converted to WALtEOF because soft is present in SPCCON. Therefore, no other special consonants can be found in that name, as a match for LTH no longer exists. Should you have written <Lt> instead, a match would have been found.
+
+Use of soft is usually a good idea whenever the names in your list have soft consonants. Other special consonants are useful whenever the language in question has them; e.g. in Hungarian, SZ is pronounced as a single consonant and makes for a good choice of a special consonant.
+
+Special Vowels
+
+There is only one valid special vowel option, multi. When used, it is put into the SPCVOW tag and makes EBoN treat certain letter combinations as single vowelic letters. Examples of such combinations are ABA, ORO, and ETHE -- each of them has three letters; and starts with a single vowel, followed by a single consonant, and the same vowel again. The last combination doesn't seem to fit these rules at first, but is in fact valid if soft consonants (cf. above) are used. Thus, the middle consonant may also be a special one.
+
+Use multi only if there are plenty of names such as Hereman and Ethelbald in your list. This is quite rare, so the option should usually be omitted.
+
+Semi-Vowelic Letters
+
+EBoN recognizes two letters, Y and U, that can either appear as vowels or consonants, depending on their position in a name.
+
+Y can be set to be used as either vowelic, consonantal, or semi-vowelic. When the first option is used, EBoN always treats Y as a vowel. You can use this option by including y:vow
+ in GENOPT, or by omitting it altogether as it is the default setting. Similarly, the second option (specified by including y:con) causes EBoN to always use Y as a consonant. Finally, y:semi makes EBoN choose which one to use, as in the English language.
+
+U can be either vowelic or semi-vowelic. The first, trivial option is used by including u:vow or by omitting the option. The second one (u:semi) makes EBoN treats U's that appear after a Q as consonants, while others are still considered vowels.
+
+# Case Study #3: Punctuation and Shuffling
+
+Case Study #3: Punctuation
+
+The following text is an excerpt from the Quenya chapter.
+
+TITLE  = "Quenya";
+LINE1  = "Quenya, or High Elven names";
+LINE2  = "from the works of J.R.R. Tolkien";
+AUTHOR = "Sami Pyörre";
+DATE   = "12-Feb-2000";
+
+SPCCON = "soft";
+SPCVOW = "";
+
+GENOPT = "structgen,statgen,punct:3,
+fit:3,val:2,prefix,suffix";
+
+NAMES =
+"Aicanaaro",
+"Ainulindaale",
+"Aiwendil",
+
+<!- names omitted >
+
+"Voronwe",
+"Wilwarin",
+"Yavanna";
+
+Punctuation is feature you should always use when you have names in your list with long or superlong vowels. Currently, there are three modes of punctuation that can be used by including the punct option in the GENOPT tag. The mode is set by a number, which can be one of the following:
+
+1	Accents and circumflexes. When this mode is used, EBoN will replace each duplicate vowel with a single accented version of that vowel. This way, each duplicate vowel is considered to be of length 2 for purposes of structures, but shown as a single vowel in the final name. Similarly, each triple vowel is replaced with a single circumflexed verson of that vowel. Use this option whenever suitable  vowels are in the list, as this will generally improve name quality. Examples: Aicanaaro > Aicanáro, Ciiirdan > Cîrdan.
+2	Quenya. Makes EBoN do the following replacements in the final name: EA > EÄ or ËA, EO > EÖ or ËO; and any ending E > Ë. This is used in the Tolkienian Quenya language. Example: Eonwe > Eönwë.
+4	Finnish. Makes EBoN make sure that no generated name will have both normal and double-accented vowels in it. This is done as follows: if the first vowel in a name is a normal one, all the double-accented vowels in the name will be converted normal ones, and vice versa. To my knowledge, this mode is generally only useful with the Finnish language. Example: Väino > Väinö.
+These modes can be combined by adding their numbers together. In the example above, both mode 1 and 2 are used, giving a resulting mode 3. In general, only mode 1 is useful for the most usual purposes.
+
+# Case Study #4: Templates
+
+Case Study #4: Templates
+
+The following text is an excerpt from a fully functional chapter.
+
+TITLE  = "Scarlet Brotherhood";
+LINE1  = "Scarlet Brotherhood";
+LINE2  = "World of Greyhawk";
+AUTHOR = "R. Di Ioia - V. Kulmala -
+S. Pyörre - C.B. Siren - A. Wall";
+DATE   = "24-Aug-1999";
+
+SPCCON = "";
+SPCVOW = "";
+
+GENOPT = "structgen,statgen,fit:3,val:2,
+prefix,suffix,y:semi";
+
+TEMPLATES = "7:4","9:1","3 6:2","13:1",
+"5 2:3","6:14","4:8","10:7","6 5:2",
+"6 2:10","18:1","5 6:1","9 6:1","5:2",
+"3 2:1","8:2","2:1","6 6:1","2 6:2",
+"1 6:1","4 2:2","4 9:1","4 4:1";
+
+NAMES =
+"Alesco",
+"Alitarc",
+"Alrha",
+
+<!- names omitted >
+
+"Yatay",
+"Zan",
+"Zereth",
+
+Templates provide features you can use when you desire one of the following: (1) limit the structures used in generation; (2) change the relative structure frequencies; (3) create names with multiple parts.
+
+Templates are listed after the TEMPLATES tag. Each template is enclosed in quotes, and consists of two parts. The first part defines the structures and possible extra characters that are used when creating a name. This parts ends in a colon character (:). The second part gives the relative frequency of the template. To clear this up, see the following examples:
+
+"7:4"	This template specifies that EBoN should use the structure 7 with the relative frequency of 4.
+"9|13:1"	Uses either structure 9 or structure 13. This whole template has the relative frequency of 1, but the individual structure to use will finally be decided on by using statistical data (frequencies) from the original list of names.
+"#:10"	# is a wildcard, meaning that EBoN should select the structure to use from all possibilities, as is done when no templates are used. This template has the relative frequency of 10.
+"3 6:2"	A more complex one: EBoN creates a name by first creating a name with structure 3, then one with structure 6, and finally puts these together, separated with a space, to create the final name. Thus, the result will be a two-part name.
+"5_7:3"	A variation of the above: EBoN creates two names (structures 5 and 7), and combines to create the final name. However, the names will be put together so that there is nothing between them. Moreover, if the first name ends in the same letter that the second one begins with, only one of these letters is taken to the name.
+"0507:3"	Once again, two names a created: one with structure 5 (05) and another with structure 7 (07). Nothing is put between them, but the first name ending in the same letter that the second one starts with has no special effect.
+Any character that is not a number or one of :|_ is simply used in a template as it is. Thus, template "5'7:3" might produce Renho'Delar.
+
+The examples above constantly refer to structure numbers. Indeed, EBoN uses internal numbering for the various name structures. They are given below, along with examples of names having a particular structure. In the table, V stands for vowel and C for consonant. These structure numbers should be used when creating templates. They can only be given using one or two digits.
+
+ 0	CV	Cú, Kay
+ 1	VC	Arndt, Om
+ 2	CVC	Sharn, Tesh
+ 3	VCV	Alrha, Tira
+ 4	CVCV	Brouka, Renho
+ 5	VCVC	Ilshar, Obers
+ 6	CVCVC	Delar, Korenth
+ 7	VCVCV	Alesco, Ellinka
+ 8	CVCVCV	Kammaclee, Kuranyie
+ 9	VCVCVC	Alitarc, Imharvon
+10	CVCVCVC	Marshenref, Schelepak
+...
+16	CVCVCVCVCVC	Hammandaturian
+...
+One obvious way of using templates is to limit name length. For example, the following tag makes sure that only names with structures 2-10 will be produced. Notice that there is no limit to how many structures a template can refer to.
+
+TEMPLATES = "2|3|4|5|6|7|8|9|10:1";
+
+Of course, a creative user will be able to create something much more interesting. Take care, however, not to create templates that only contain structures that match no names in the name list.
+
+# Error messages
+
+Error Messages
+
+Sometimes, all does not go well in creating a chapter. The error messages EBoN may give are listed below. They should guide you in locating the error. Remember, that most errors are caused by simple typos. 
+
+Couldn'topen file
+	The chapter file is either reserved by another application, or has disappeared after EBoN was opened.
+Invalid ormissingXXX tag
+	Check tag XXX. The tag title is spelt wrong, either one of the quotes is missing, or the line is lacking the ending semicolon.
+Invalidcharacterin name#NN
+	Name #NN contains non-standard characters. The allowed characters are the following:
+
+BCDFGHJKLMNPQRSTVWXZÇÐÑÞŠ-
+AEIOUYÄËÏÖÜŸÁÉÍÓÚÝÂÊÎÔÛÀÈÌÒÙÃÕÅÆØŒ'
+
+A missing quote or comma in the name list may also be the cause of this error.
+Too fewelementsin name#NN
+	Name #NN contains only vowels or only consonants, but not both. Such names are not allowed.
+Too manydifferentelements
+	A chapter may have at most 512 vowelic and 1024 consonantal elements.
+Invalidcharacterin specialconsonant#NN
+	Special consonant #NN contains non-consonantal characters. The allowed characters are the following:
+
+BCDFGHJKLMNPQRSTVWXZ
+bcdfgjklmnpqrstvwxzÇÐÑÞŠ-
+Too manyspecialconsonants
+	A maximum of 10 special consonants is allowed.
+
+# Final Honing
+
+Final Honing
+
+Once your custom chapter is working it must be thoroughly tested. Most chapters need some fine tuning before yielding the best possible results. Below are given a few hints on refining your chapter:
+
+1. Look for unwanted names. If some undesired letter combination occurs, see whether it appears in several locations in your chapter's name list. A single annoying name may be removed from the list, thus eliminating the combination. Another, more elaborate way of handling such situations is by declaring special consonants in the SPCCON tag.
+
+2. Alter the generation options. Try changing the run-time generation options to find the optimal setup, and then use these settings in the GENOPT tag.
+
+3. Keep checking the generation log; it will give you further hints on choosing the right options. You can view it by pressing the Log button, which is only visible when you are using a chapter that has not been unlocked yet. (You will learn about unlocking chapters later). Whenever EBoN creates a name, the log shows some information on how it was done. A typical log will resemble the one below:
+
+EBoN log file
+
+TEMPLATE:	#
+
+Structure:	9 (4 = 111211)
+
+AM AN AR AT AV EL EM ER IL IS IT OL OR UL UR : A.R 
+A O U I E : A
+ND LD LM SS NC NN NW NT Ny ST LL LW Ly TT Ty : SS
+IL AR : A.R 
+
+-> ARASSAR -> ARASSAR
+
+-> Arassar
+
+Below the title, the first thing the log gives is the template that was used in creating the name. When the chapter has no templates specified, #is always shown.
+
+Next, structure number is shown. It is followed by, in parenthesis, substructure number and the actual substructure that was used. By looking at this information, you can see that the name is of the structure 9 (VCVCVC), having the element lengths of 1,1,1,2,1,1. The actual substructure number (4) is of no interest.
+
+The following lines gives the element lists that elements were chosen from, as well as the chosen elements. In this case, both prefixes and suffixes were used, so the first two and the last two elements were chosen as a package. You'll also notice that EBoN uses mostly uppercase letters when creating the name, only marking some special letters with lowercase ones. Here, the lowercase y denotes a consonantal Y.
+
+Finally, the generated name is given in three stages: (1) as it was generated, (2) after it was validated, and (3) the whole name titlecased and punctuated, with any special letters substituted. If a more complex template was used, this final name would be given after the whole template was done with.
+
+What's more interesting here than the way EBoN makes a name are the possible error messages that may be produced in the process. They give hints on how a chapter could be improved. In the following, the errors along with their causes and suggested ways of fixing them are given.
+
+!NOOPT	No fittable elements available for this position. If this error occurs often, lower the fitting level.
+!PRE/NOOPT	No possible prefixes for this structure. This failure is possible only when the Initial Letter is chosen to be any other than *. If this occurs very often, it is advised that you don't use prefixes.
+!SUF/NOOPT	No fittable suffixes available. If this occurs all the time, either stop using suffixes or lower the fitting level.
+The following errors may occur when the name is validated. They should not usually prompt any changes, but very common occurences of them may mean that you should lower the validation level.
+
+!DIST/#	The distance between occurences of letter # was too short.
+!FREQ/#	The relative frequency of letter # appearing in a name was too high.
+!REP	The name had a repeating cycle such as ROND in RONDIROND.
+
+# .QCH -- Quick Chapters
+
+Quick Chapters
+
+When you open your chapter in EBoN for the first time, a new file with .qch extension is created. These files are called quick chapters, and they considerably speed up subsequent openings. If the corresponding .ebn file is modified, the .qch file will also be updated the next time the chapter is opened.
+
+If automatic updating does not happen for some reason, just delete the .qch file and EBoN will take care of the rest. This is usually only needed if you have unlocked a chapter and wish the quick chapter to be unlocked too.

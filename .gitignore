@@ -1,3 +1,7 @@
 __pycache__/
 ebnReady.txt
 ebnDebug.txt
+
+# Original Everchanging Book of Names program + reference data (local only:
+# proprietary binaries + bulk .qch/.ebn). We decode these into our own format.
+Ebon/
