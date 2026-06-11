@@ -131,6 +131,13 @@ class App(tk.Tk):
         s.configure("Vertical.TScrollbar", background=self.SELECT, troughcolor=BG,
                     bordercolor=BG, arrowcolor=INK)
 
+        s.configure("TCheckbutton", background=BG, foreground=INK)
+        s.map("TCheckbutton", background=[("active", BG)])
+        s.configure("TCombobox", fieldbackground=PANEL, background=PANEL,
+                    bordercolor=BORDER, arrowcolor=INK)
+        s.map("TCombobox", fieldbackground=[("readonly", PANEL)],
+              foreground=[("readonly", INK)])
+
     def _pick_mono(self):
         for fam in ("DejaVu Sans Mono", "Liberation Mono", "Consolas", "Menlo", "Courier New"):
             if fam in tkfont.families():
@@ -191,7 +198,7 @@ class App(tk.Tk):
         ttk.Label(right, textvariable=self.info_var, font=self.font_h).grid(
             row=0, column=0, sticky="w")
 
-        # controls
+        # controls — row 0: amount/length/seed
         ctl = ttk.Frame(right)
         ctl.grid(row=1, column=0, sticky="ew", pady=8)
         self.count = tk.IntVar(value=20)
@@ -204,10 +211,24 @@ class App(tk.Tk):
         ttk.Label(ctl, text="Seed").grid(row=0, column=6, padx=(12, 4))
         ttk.Entry(ctl, textvariable=self.seed, width=8).grid(row=0, column=7)
         ttk.Label(ctl, text="(blank = random)", style="Hint.TLabel").grid(
-            row=0, column=8, padx=(4, 0))
+            row=0, column=8, padx=(4, 0), sticky="w")
 
-        gen = ttk.Button(right, text="Generate  ▸", style="Big.TButton", command=self.generate)
-        gen.grid(row=1, column=0, sticky="e")
+        # controls — row 1: fit level, prefix/suffix, Generate
+        self.FIT_LABELS = ["0 — loose", "1 — adjacency", "2 — skip C", "3 — skip C+V"]
+        self.fit_var = tk.StringVar(value=self.FIT_LABELS[1])
+        self.use_prefix = tk.BooleanVar(value=False)
+        self.use_suffix = tk.BooleanVar(value=False)
+        ttk.Label(ctl, text="Fit").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        fit_box = ttk.Combobox(ctl, textvariable=self.fit_var, values=self.FIT_LABELS,
+                               state="readonly", width=13)
+        fit_box.grid(row=1, column=1, columnspan=3, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(ctl, text="Prefix", variable=self.use_prefix).grid(
+            row=1, column=4, columnspan=2, sticky="w", padx=(12, 0), pady=(8, 0))
+        ttk.Checkbutton(ctl, text="Suffix", variable=self.use_suffix).grid(
+            row=1, column=6, columnspan=2, sticky="w", pady=(8, 0))
+        ctl.columnconfigure(8, weight=1)
+        ttk.Button(ctl, text="Generate  ▸", style="Big.TButton", command=self.generate).grid(
+            row=1, column=8, sticky="e", pady=(8, 0))
 
         # results
         res = ttk.Frame(right)
@@ -300,9 +321,16 @@ class App(tk.Tk):
         author = (ch.author or "").strip()
         meta = f"  ·  {author}" if author and author not in ("0", "-") else ""
         self.info_var.set(title + meta)
+
+        # Reflect this chapter's native options in the controls.
+        self.fit_var.set(self.FIT_LABELS[max(0, min(3, ch.opts.fit))])
+        self.use_prefix.set(bool(ch.opts.prefix) and bool(ch.prefixes))
+        self.use_suffix.set(bool(ch.opts.suffix) and bool(ch.suffixes))
+
+        skip = " · skip-fit data" if ch.adj2 else " · no skip-data (fit 2/3 = 1)"
         self.status.config(
             text=f"{len(ch.vowel_elements)} vowel · {len(ch.cons_elements)} cons · "
-                 f"{len(ch.structures)} structures · fit {ch.opts.fit}")
+                 f"{len(ch.structures)} structures{skip}")
 
     # ---- generation ----------------------------------------------------- #
     def generate(self):
@@ -316,6 +344,11 @@ class App(tk.Tk):
         except Exception as exc:
             messagebox.showerror("Could not load chapter", str(exc))
             return
+
+        # Apply the fit / prefix / suffix controls to this chapter's options.
+        ch.opts.fit = int(self.fit_var.get()[0])
+        ch.opts.prefix = self.use_prefix.get()
+        ch.opts.suffix = self.use_suffix.get()
 
         seed_txt = self.seed.get().strip()
         seed = int(seed_txt) if seed_txt.lstrip("-").isdigit() else None
