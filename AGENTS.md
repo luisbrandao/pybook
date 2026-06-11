@@ -41,7 +41,7 @@ zero.
   runtime.
 - `data/seeds/` — the user's own plaintext name lists (one name per line),
   themed per file. These work at full quality via strategy A.
-- `Doc/` — original EBoN help text (`1-GettingStarted`, `2-BasicUse`,
+- `research/doc/` — original EBoN help text (`1-GettingStarted`, `2-BasicUse`,
   `3-WritingChapters` = the algorithm spec) + `debug.txt` (real EBoN output).
 - `research/` — reverse-engineering artifacts (decompiled C from Ghidra, Ghidra
   scripts, format notes, standalone parser) + old superseded code
