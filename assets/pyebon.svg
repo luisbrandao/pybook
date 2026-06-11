@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PyEBoN launcher icon: an open book in the GUI's ivory/sepia palette. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#F3EEDF" stroke="#A8916B" stroke-width="3"/>
+  <!-- back cover -->
+  <path d="M20 38 Q44 28 62 38 L62 96 Q44 86 20 96 Z" fill="#8B6F47"/>
+  <path d="M108 38 Q84 28 66 38 L66 96 Q84 86 108 96 Z" fill="#8B6F47"/>
+  <!-- pages -->
+  <path d="M25 42 Q45 34 61 42 L61 91 Q45 83 25 91 Z" fill="#FBF8EF"/>
+  <path d="M103 42 Q83 34 67 42 L67 91 Q83 83 103 91 Z" fill="#FBF8EF"/>
+  <!-- spine -->
+  <rect x="62" y="36" width="4" height="60" fill="#6E5635"/>
+  <!-- text lines, left page -->
+  <g stroke="#A8916B" stroke-width="3" stroke-linecap="round">
+    <line x1="31" y1="50" x2="55" y2="47"/>
+    <line x1="31" y1="59" x2="55" y2="56"/>
+    <line x1="31" y1="68" x2="55" y2="65"/>
+    <line x1="31" y1="77" x2="47" y2="75"/>
+  </g>
+  <!-- text lines, right page -->
+  <g stroke="#A8916B" stroke-width="3" stroke-linecap="round">
+    <line x1="73" y1="47" x2="97" y2="50"/>
+    <line x1="73" y1="56" x2="97" y2="59"/>
+    <line x1="73" y1="65" x2="97" y2="68"/>
+    <line x1="73" y1="75" x2="89" y2="77"/>
+  </g>
+</svg>

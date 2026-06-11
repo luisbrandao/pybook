@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=PyEBoN
+GenericName=Name Generator
+Comment=Everchanging Book of Names — fantasy name generator
+Exec=/bin/python3 /dados/techmago/git/luis/pybook/pyebon_gui.py
+Path=/dados/techmago/git/luis/pybook
+Icon=/dados/techmago/git/luis/pybook/assets/pyebon.svg
+Terminal=false
+Categories=Game;RolePlaying;
+Keywords=name;names;generator;fantasy;ebon;tolkien;
+StartupNotify=true
