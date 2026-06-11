@@ -60,11 +60,23 @@ def load_any(kind: str, path: str):
 # The app.
 # --------------------------------------------------------------------------- #
 class App(tk.Tk):
+    # Ivory palette.
+    BG = "#F3EEDF"        # ivory base
+    PANEL = "#FBF8EF"     # lighter ivory for inputs / results
+    INK = "#3D372C"       # warm near-black text
+    MUTED = "#9A8F77"     # hints
+    ACCENT = "#A6794B"    # warm tan / sepia
+    ACCENT_HOVER = "#946841"
+    ACCENT_FG = "#FFFBF2"
+    BORDER = "#DED4BD"
+    SELECT = "#E8D9B5"    # soft gold selection
+
     def __init__(self):
         super().__init__()
         self.title("pyebon — Everchanging Book of Names")
-        self.geometry("820x560")
-        self.minsize(680, 440)
+        self.geometry("920x580")
+        self.minsize(720, 460)
+        self.configure(background=self.BG)
 
         try:
             ttk.Style().theme_use("clam")
@@ -88,8 +100,36 @@ class App(tk.Tk):
         base = tkfont.nametofont("TkDefaultFont").actual()["family"]
         self.font_h = (base, 11, "bold")
         self.font_mono = self._pick_mono()
-        s.configure("Big.TButton", font=(base, 11, "bold"), padding=8)
-        s.configure("Hint.TLabel", foreground="#666")
+
+        BG, PANEL, INK, MUTED = self.BG, self.PANEL, self.INK, self.MUTED
+        ACC, ACCH, ACCFG, BORDER = self.ACCENT, self.ACCENT_HOVER, self.ACCENT_FG, self.BORDER
+
+        s.configure(".", background=BG, foreground=INK, fieldbackground=PANEL,
+                    bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER,
+                    focuscolor=ACC)
+        s.configure("TFrame", background=BG)
+        s.configure("TLabel", background=BG, foreground=INK)
+        s.configure("Hint.TLabel", background=BG, foreground=MUTED)
+        s.configure("TPanedwindow", background=BG)
+        s.configure("Sash", sashthickness=8, gripcount=0)
+
+        s.configure("TEntry", fieldbackground=PANEL, bordercolor=BORDER, padding=4)
+        s.configure("TSpinbox", fieldbackground=PANEL, bordercolor=BORDER, arrowsize=12, padding=2)
+
+        # Buttons: flat tan accent with ivory text.
+        s.configure("TButton", background=PANEL, foreground=INK, bordercolor=BORDER,
+                    relief="flat", padding=6)
+        s.map("TButton",
+              background=[("active", self.SELECT)],
+              bordercolor=[("active", ACC)])
+        s.configure("Big.TButton", font=(base, 11, "bold"), padding=9,
+                    background=ACC, foreground=ACCFG, bordercolor=ACC, relief="flat")
+        s.map("Big.TButton",
+              background=[("active", ACCH), ("pressed", ACCH)],
+              foreground=[("active", ACCFG)])
+
+        s.configure("Vertical.TScrollbar", background=self.SELECT, troughcolor=BG,
+                    bordercolor=BG, arrowcolor=INK)
 
     def _pick_mono(self):
         for fam in ("DejaVu Sans Mono", "Liberation Mono", "Consolas", "Menlo", "Courier New"):
@@ -101,14 +141,19 @@ class App(tk.Tk):
     def _build_layout(self):
         outer = ttk.Frame(self, padding=10)
         outer.pack(fill=tk.BOTH, expand=True)
-        outer.columnconfigure(0, weight=0, minsize=240)
-        outer.columnconfigure(1, weight=1)
+        outer.columnconfigure(0, weight=1)
         outer.rowconfigure(0, weight=1)
 
+        paned = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
+        paned.grid(row=0, column=0, sticky="nsew")
+
         # ---- left: chapter picker ----
-        left = ttk.Frame(outer)
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left = ttk.Frame(paned, padding=(0, 0, 10, 0))
         left.rowconfigure(2, weight=1)
+        left.columnconfigure(0, weight=1)
+        paned.add(left, weight=1)
+        # Restore a comfortably wide chapter column once the window is laid out.
+        self.after(0, lambda: self._init_sash(paned, 360))
 
         ttk.Label(left, text="Chapter", font=self.font_h).grid(row=0, column=0, sticky="w")
         self.search_var = tk.StringVar()
@@ -119,7 +164,12 @@ class App(tk.Tk):
         box = ttk.Frame(left)
         box.grid(row=2, column=0, sticky="nsew")
         box.rowconfigure(0, weight=1); box.columnconfigure(0, weight=1)
-        self.listbox = tk.Listbox(box, activestyle="none", exportselection=False)
+        self.listbox = tk.Listbox(
+            box, activestyle="none", exportselection=False,
+            background=self.PANEL, foreground=self.INK,
+            selectbackground=self.SELECT, selectforeground=self.INK,
+            highlightthickness=1, highlightbackground=self.BORDER,
+            highlightcolor=self.BORDER, borderwidth=0, relief="flat")
         self.listbox.grid(row=0, column=0, sticky="nsew")
         sb = ttk.Scrollbar(box, orient="vertical", command=self.listbox.yview)
         sb.grid(row=0, column=1, sticky="ns")
@@ -131,10 +181,10 @@ class App(tk.Tk):
         self.count_label.grid(row=3, column=0, sticky="w", pady=(6, 0))
 
         # ---- right: controls + results ----
-        right = ttk.Frame(outer)
-        right.grid(row=0, column=1, sticky="nsew")
+        right = ttk.Frame(paned, padding=(10, 0, 0, 0))
         right.rowconfigure(2, weight=1)
         right.columnconfigure(0, weight=1)
+        paned.add(right, weight=2)
 
         # info line
         self.info_var = tk.StringVar(value="")
@@ -164,7 +214,10 @@ class App(tk.Tk):
         res.grid(row=2, column=0, sticky="nsew")
         res.rowconfigure(0, weight=1); res.columnconfigure(0, weight=1)
         self.results = tk.Text(res, font=self.font_mono, wrap="word", state="disabled",
-                               background="#fbfbfa", relief="flat", padx=10, pady=8)
+                               background=self.PANEL, foreground=self.INK,
+                               insertbackground=self.INK, relief="flat",
+                               highlightthickness=1, highlightbackground=self.BORDER,
+                               padx=12, pady=10, spacing1=2, spacing3=2)
         self.results.grid(row=0, column=0, sticky="nsew")
         rsb = ttk.Scrollbar(res, orient="vertical", command=self.results.yview)
         rsb.grid(row=0, column=1, sticky="ns")
@@ -185,6 +238,12 @@ class App(tk.Tk):
         self.bind("<Control-g>", lambda e: self.generate())
         self.bind("<Return>", lambda e: self.generate())
 
+    def _init_sash(self, paned, x):
+        try:
+            paned.sashpos(0, x)
+        except tk.TclError:
+            pass
+
     def _spin(self, parent, label, var, lo, hi, col):
         ttk.Label(parent, text=label).grid(row=0, column=col, padx=(0 if col == 0 else 12, 4))
         ttk.Spinbox(parent, from_=lo, to=hi, textvariable=var, width=5).grid(row=0, column=col + 1)
@@ -192,11 +251,11 @@ class App(tk.Tk):
     def _placeholder(self, entry, text):
         def on_focus_in(_):
             if entry.get() == text:
-                entry.delete(0, tk.END); entry.config(foreground="black")
+                entry.delete(0, tk.END); entry.config(foreground=self.INK)
         def on_focus_out(_):
             if not entry.get():
-                entry.insert(0, text); entry.config(foreground="#999")
-        entry.insert(0, text); entry.config(foreground="#999")
+                entry.insert(0, text); entry.config(foreground=self.MUTED)
+        entry.insert(0, text); entry.config(foreground=self.MUTED)
         entry.bind("<FocusIn>", on_focus_in)
         entry.bind("<FocusOut>", on_focus_out)
         self._ph_text = text
