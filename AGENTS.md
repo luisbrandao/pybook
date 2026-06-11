@@ -39,6 +39,9 @@ zero.
 - `data/library/` — **331 pre-extracted chapters** in JSON format (our own
   format; serialized `Chapter` objects). The engine no longer needs `Ebon/` at
   runtime.
+- `assets/` — the `.desktop` launcher + SVG icon (installed copy lives in
+  `~/.local/share/applications/pyebon.desktop`; it uses absolute paths, so
+  re-copy it if the repo moves).
 - `data/seeds/` — the user's own plaintext name lists (one name per line),
   themed per file. These work at full quality via strategy A.
 - `research/doc/` — original EBoN help text (`1-GettingStarted`, `2-BasicUse`,
