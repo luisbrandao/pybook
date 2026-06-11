@@ -65,7 +65,7 @@ pyebon/                the engine
 data/
   library/             331 pre-extracted chapters in JSON format
   seeds/               custom seed lists (one name per line)
-Doc/                   original EBoN documentation (algorithm spec)
+  Doc/                   original EBoN documentation (algorithm spec)
 research/              reverse-engineering artifacts + old superseded code
 ```
 
