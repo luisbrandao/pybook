@@ -193,10 +193,15 @@ class App(tk.Tk):
         right.columnconfigure(0, weight=1)
         paned.add(right, weight=2)
 
-        # info line
+        # info line (title on the left, a help "?" pinned to the right corner)
+        inforow = ttk.Frame(right)
+        inforow.grid(row=0, column=0, sticky="ew")
+        inforow.columnconfigure(0, weight=1)
         self.info_var = tk.StringVar(value="")
-        ttk.Label(right, textvariable=self.info_var, font=self.font_h).grid(
+        ttk.Label(inforow, textvariable=self.info_var, font=self.font_h).grid(
             row=0, column=0, sticky="w")
+        ttk.Button(inforow, text="?", width=2, command=self._show_help).grid(
+            row=0, column=1, sticky="e")
 
         # controls — row 0: amount/length/seed
         ctl = ttk.Frame(right)
@@ -384,6 +389,48 @@ class App(tk.Tk):
             return
         self.clipboard_clear(); self.clipboard_append(txt)
         self.status.config(text="copied to clipboard")
+
+    def _show_help(self):
+        win = tk.Toplevel(self)
+        win.title("About the options")
+        win.configure(background=self.BG)
+        win.transient(self); win.resizable(False, False)
+        frame = ttk.Frame(win, padding=16)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        def section(title, body):
+            ttk.Label(frame, text=title, font=self.font_h).pack(anchor="w", pady=(8, 2))
+            ttk.Label(frame, text=body, justify="left", wraplength=440,
+                      style="Hint.TLabel").pack(anchor="w")
+
+        ttk.Label(frame, text="How names are made", font=(self.font_h[0], 13, "bold")).pack(anchor="w")
+        ttk.Label(frame, wraplength=440, justify="left", style="Hint.TLabel",
+                  text="Each name is built from chunks (vowel runs and consonant runs) "
+                       "taken from the chapter, arranged into a shape seen in the "
+                       "source names.").pack(anchor="w", pady=(2, 0))
+
+        section("Fit — how closely a name must echo the source",
+                "0  loose: any chunk can go anywhere. Most variety, least authentic.\n"
+                "1  adjacency: a chunk may only follow another chunk if that pairing "
+                "was actually seen in the source.\n"
+                "2  skip-C: also checks consonants one step apart (consonant-skip-vowel).\n"
+                "3  skip-C+V: also checks vowels one step apart. Strictest, most authentic, "
+                "fewest possible names.\n"
+                "Note: the imported library books carry no skip data, so 2 and 3 behave "
+                "like 1 for them. Your own seed lists support all four.")
+
+        section("Prefix / Suffix — believable starts and ends",
+                "Prefix forces the first two chunks to be a real opening seen in the "
+                "source; Suffix forces the last two to be a real ending. Turn them on "
+                "for names that begin and end like the originals.")
+
+        ttk.Button(frame, text="Close", command=win.destroy).pack(anchor="e", pady=(14, 0))
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.update_idletasks()
+        # center over the main window
+        x = self.winfo_rootx() + (self.winfo_width() - win.winfo_width()) // 2
+        y = self.winfo_rooty() + 80
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
 
     def save(self):
         txt = self._results_text()

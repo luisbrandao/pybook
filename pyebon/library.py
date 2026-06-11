@@ -25,7 +25,8 @@ LIBRARY_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "library"
 def save_chapter(ch: Chapter, path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(ch.to_dict(), fh, ensure_ascii=False, separators=(",", ":"))
+        json.dump(ch.to_dict(), fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
 
 
 def load_chapter(path: str) -> Chapter:
