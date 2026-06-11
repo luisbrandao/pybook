@@ -3,11 +3,11 @@
     python -m pyebon <chapter> [-n COUNT] [-m MIN] [-x MAX] [-s SEED]
 
 `<chapter>` may be:
-  * a library chapter name (e.g. `core_QUENYA`) — reads library/<name>.json,
+  * a library chapter name (e.g. `core_QUENYA`) — reads data/library/<name>.json,
   * a path to one of our `.json` library files,
   * a plaintext `.ebn` seed file (strategy A), or
   * an EBoN compiled `.qch` file (strategy B).
-Run `python -m pyebon.library extract` once to build the library/ folder.
+Run `python -m pyebon.library extract` once to build the data/library/ folder.
 """
 
 import argparse
@@ -38,6 +38,12 @@ def main(argv=None):
     elif chapter.lower().endswith(".qch"):
         from .qch import qch_to_chapter
         ch, _ = qch_to_chapter(chapter, fit=1)
+    elif chapter.lower().endswith(".txt"):
+        from .preprocess import build_chapter
+        with open(chapter, encoding="utf-8") as f:
+            names = [ln.strip() for ln in f if ln.strip()]
+        ch = build_chapter(names)
+        ch.title = os.path.splitext(os.path.basename(chapter))[0]
     else:
         ch = load_ebn(chapter)
 

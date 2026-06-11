@@ -3,7 +3,7 @@
 
 A clean two-pane Tkinter front-end over the new `pyebon` engine:
   * left  — a searchable list of every chapter (the 331 extracted library books
-            plus your own chapters/*.txt seed lists),
+            plus your own data/seeds/*.txt seed lists),
   * right — generation controls (count, length, seed) and the results, with
             copy / save / reroll.
 
@@ -23,11 +23,11 @@ from pyebon.preprocess import build_chapter
 from pyebon.generate import Generator, GenerationError
 
 ROOT = pathlib.Path(__file__).resolve().parent
-CHAPTERS_DIR = ROOT / "chapters"
+CHAPTERS_DIR = ROOT / "data" / "seeds"
 
 
 # --------------------------------------------------------------------------- #
-# Chapter discovery — library .json books + the user's chapters/*.txt lists.
+# Chapter discovery — library .json books + the user's data/seeds/*.txt lists.
 # --------------------------------------------------------------------------- #
 def _pretty(stem: str) -> str:
     return stem.replace("_", " ")
@@ -47,7 +47,7 @@ def discover_chapters():
 
 
 def load_any(kind: str, path: str):
-    """Load a Chapter from either a library .json or a chapters/*.txt seed list."""
+    """Load a Chapter from either a library .json or a data/seeds/*.txt seed list."""
     if kind == "lib":
         return load_chapter(path)
     names = [ln.strip() for ln in open(path, encoding="utf-8") if ln.strip()]
@@ -447,7 +447,7 @@ class App(tk.Tk):
 
 def main():
     if not pathlib.Path(LIBRARY_DIR).is_dir() and not CHAPTERS_DIR.is_dir():
-        print("No chapters found. Run: python3 -m pyebon.library extract")
+        print("No chapters found. Run: python -m pyebon.library extract")
         return
     App().mainloop()
 

@@ -19,7 +19,7 @@ python3 pyebon_gui.py
 python -m pyebon core_QUENYA -n 20
 
 # CLI — generate from your own seed list
-python -m pyebon chapters/ST-Klingon.txt -n 20
+python -m pyebon data/seeds/ST-Klingon.txt -n 20
 
 # CLI — show chapter metadata
 python -m pyebon core_SINDARIN --info
@@ -33,7 +33,7 @@ python -m pyebon.library list
 **331 chapters** extracted from the original EBoN program, covering:
 Tolkien (Quenya, Sindarin, Khuzdûl…), Greyhawk, Wheel of Time, Forgotten
 Realms, Star Trek species, European gods, Old World cultures, and more — plus
-**21 custom seed lists** (Greek, Roman, Viking, ASoIaF, planets…).
+**21 custom seed lists** in `data/seeds/` (Greek, Roman, Viking, ASoIaF, planets…).
 
 The library is pre-built in `library/` as JSON. The engine does not need the
 original EBoN files at runtime.
@@ -62,8 +62,9 @@ pyebon/                the engine
   ebn.py                 parse plaintext .ebn chapter files
   library.py             extract/load/save chapters as JSON
   __main__.py            CLI entry point
-library/               331 pre-extracted chapters in JSON format
-chapters/              custom seed lists (one name per line)
+data/
+  library/             331 pre-extracted chapters in JSON format
+  seeds/               custom seed lists (one name per line)
 Doc/                   original EBoN documentation (algorithm spec)
 research/              reverse-engineering artifacts + old superseded code
 ```

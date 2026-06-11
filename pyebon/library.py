@@ -4,7 +4,7 @@ Once chapters are extracted here, the engine no longer needs EBoN's original
 `Ebon/` files at runtime. Each `.json` is a serialized Chapter (see
 `model.Chapter.to_dict`). Build the library with:
 
-    python -m pyebon.library extract            # Ebon/ -> library/
+    python -m pyebon.library extract            # Ebon/ -> data/library/
     python -m pyebon.library list               # show what's been extracted
 
 and load a chapter for generation with `load_chapter(path)`.
@@ -19,7 +19,7 @@ from typing import List
 
 from .model import Chapter
 
-LIBRARY_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "library")
+LIBRARY_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "library")
 
 
 def save_chapter(ch: Chapter, path: str) -> None:

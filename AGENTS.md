@@ -36,10 +36,11 @@ zero.
     soft consonants and SPCCON custom clusters.
   - `library.py` — extract/load/save chapters as JSON; CLI for bulk extraction.
   - `__main__.py` — CLI: `python -m pyebon <chapter|file> -n 20 [--info]`.
-- `library/` — **331 pre-extracted chapters** in JSON format (our own format;
-  serialized `Chapter` objects). The engine no longer needs `Ebon/` at runtime.
-- `chapters/` — the user's own plaintext name lists (one name per line), themed
-  per file. These work at full quality via strategy A.
+- `data/library/` — **331 pre-extracted chapters** in JSON format (our own
+  format; serialized `Chapter` objects). The engine no longer needs `Ebon/` at
+  runtime.
+- `data/seeds/` — the user's own plaintext name lists (one name per line),
+  themed per file. These work at full quality via strategy A.
 - `Doc/` — original EBoN help text (`1-GettingStarted`, `2-BasicUse`,
   `3-WritingChapters` = the algorithm spec) + `debug.txt` (real EBoN output).
 - `research/` — reverse-engineering artifacts (decompiled C from Ghidra, Ghidra
@@ -140,7 +141,7 @@ One known fidelity gap remains (optional; the "inspiration" goal is met):
 ```
 python3 pyebon_gui.py                                   # GUI
 python -m pyebon core_QUENYA -n 20                      # generate by library name
-python -m pyebon chapters/ST-Klingon.txt -n 20          # generate from seed list
+python -m pyebon data/seeds/ST-Klingon.txt -n 20         # generate from seed list
 python -m pyebon core_SINDARIN --info                   # show chapter metadata
 python -m pyebon.library list                           # list all 331 library chapters
 python -m pyebon.library extract                        # rebuild library/ from Ebon/
