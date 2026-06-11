@@ -19,31 +19,36 @@ zero.
 
 ## Repository layout
 
-- `pyebon/` — our engine (the deliverable). Modules:
+- `pyebon_gui.py` — Tkinter GUI: the main user-facing entry point.
+- `pyebon/` — the engine (the deliverable). Modules:
   - `model.py` — `Chapter` (our format): element inventories, a frequency-weighted
     **adjacency graph** with `START`/`END` sentinels (the heart of EBoN "fit"),
     structures, prefix/suffix pools, `GenOpts`.
   - `splitting.py` — split a name into alternating vowelic/consonantal elements
-    (Doc/3 step 2). `mark_special` is a stub hook for soft consonants (SPCCON).
+    (Doc/3 step 2).
   - `preprocess.py` — **strategy A**: build a `Chapter` from seed names.
   - `generate.py` — frequency-weighted random walk over the adjacency graph with
-    backtracking; structure selection; validation (`!REP` etc.).
+    backtracking; structure selection; validation (`!REP` etc.); real fit:2/3
+    (skip-adjacency) and prefix/suffix forcing.
   - `ebn.py` — parse plaintext `.ebn` chapter files.
-  - `qch.py` — **strategy B**: decode EBoN's compiled `.qch` binary; `qch_to_chapter`
-    bridges it into the engine (currently fit:0 only — see "Current task").
-  - `__main__.py` — CLI: `python -m pyebon <chapter.ebn|.qch> -n 20 [--info]`.
-- `Doc/` — original EBoN help text (`1-GettingStarted`, `2-BasicUse`,
-  `3-WritingChapters` = the algorithm spec) + our `qch-format-notes.md`
-  (the `.qch` binary format RE) + `debug.txt` (real EBoN output samples).
-- `Ebon/` — **gitignored.** The original program (proprietary `.exe`s) + 330
-  `.qch` + a few `.ebn` + book data. Local reference only; we decode it into our
-  format. Do not commit.
+  - `qch.py` — **strategy B**: decode EBoN's compiled `.qch` binary;
+    `qch_to_chapter` bridges it into the engine; `expand_special()` handles
+    soft consonants and SPCCON custom clusters.
+  - `library.py` — extract/load/save chapters as JSON; CLI for bulk extraction.
+  - `__main__.py` — CLI: `python -m pyebon <chapter|file> -n 20 [--info]`.
+- `library/` — **331 pre-extracted chapters** in JSON format (our own format;
+  serialized `Chapter` objects). The engine no longer needs `Ebon/` at runtime.
 - `chapters/` — the user's own plaintext name lists (one name per line), themed
-  per file. These work at full quality via strategy A right now.
-- `name_generator_enhanced.py`, `name_generator_gui.py`, `cleaner.py` — the
-  user's earlier, simpler generator (pre-EBoN-RE). Superseded by `pyebon/` but
-  left in place.
-- `qch_explore.py` — scratch hex/format analysis tool for `.qch`.
+  per file. These work at full quality via strategy A.
+- `Doc/` — original EBoN help text (`1-GettingStarted`, `2-BasicUse`,
+  `3-WritingChapters` = the algorithm spec) + `debug.txt` (real EBoN output).
+- `research/` — reverse-engineering artifacts (decompiled C from Ghidra, Ghidra
+  scripts, format notes, standalone parser) + old superseded code
+  (`name_generator_enhanced.py`, `name_generator_gui.py`, `cleaner.py`,
+  `qch_explore.py`). See `research/README.md` for details.
+- `Ebon/` — **gitignored.** The original program (proprietary `.exe`s) + 330
+  `.qch` + a few `.ebn` + book data. Local reference only; no longer needed at
+  runtime.
 
 ## The EBoN algorithm (summary; full spec in Doc/3-WritingChapters.txt)
 
@@ -82,8 +87,8 @@ incl. the 12 encrypted `core/*.EBN`). Cracking the matrices unlocks 326 chapters
 The `.qch` format is **fully decoded and validated** (lands exactly on `#END`
 for debug/Luis/klingon). We decompiled EBoN.exe with Ghidra headless — writer
 `0x41b6e1`, reader `0x41cd90`, generator `0x420730` — see
-`Doc/qch-writer-decompiled.md` and the faithful parser `re/parse_qch.py`. RE
-artifacts/scripts live in `re/`. Key corrections to earlier guesses:
+`research/qch-writer-decompiled.md` and the faithful parser
+`research/parse_qch.py`. RE artifacts/scripts live in `research/`. Key corrections to earlier guesses:
 
 - **Numeric cells are BIG-ENDIAN uint16** (high byte first). This was the whole
   blocker; little-endian searches could never match.
@@ -119,7 +124,7 @@ One known fidelity gap remains (optional; the "inspiration" goal is met):
   longer keeps its B/C vowel sets disjoint via the `.qch` path (strategy A from
   seeds still does, exactly). M1/M2 columns are a fit-distance index the
   generator derives from (position, struct length) via `>>1`; porting it means
-  transliterating the 144KB generator (`re/ebonW_00420730.c`).
+  transliterating the 144KB generator (`research/ebonW_00420730.c`).
 
 ## Conventions
 
@@ -133,8 +138,10 @@ One known fidelity gap remains (optional; the "inspiration" goal is met):
 ## Quick commands
 
 ```
-python -m pyebon Ebon/startrek/klingon.ebn -n 20        # full-quality (seeds)
-python -m pyebon Ebon/core/QUENYA.qch -n 20             # locked chapter (fit:0 for now)
-python -m pyebon Ebon/core/SINDARIN.qch --info          # decoded metadata/inventory
-python qch_explore.py Ebon/<path>.qch                   # raw format dump
+python3 pyebon_gui.py                                   # GUI
+python -m pyebon core_QUENYA -n 20                      # generate by library name
+python -m pyebon chapters/ST-Klingon.txt -n 20          # generate from seed list
+python -m pyebon core_SINDARIN --info                   # show chapter metadata
+python -m pyebon.library list                           # list all 331 library chapters
+python -m pyebon.library extract                        # rebuild library/ from Ebon/
 ```
