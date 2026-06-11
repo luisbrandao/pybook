@@ -102,20 +102,24 @@ consonant element pools, the structure distribution, and prefix/suffix START/END
 edges (authentic openings/closings). Locked chapters generate clearly on-theme
 (Quenya: Nahima, Tintaner, Eranoon; Sindarin: Urnir, Gindered, Hirnosir).
 
-Two known fidelity gaps remain (both optional, "inspiration" goal is met):
-1. **EBoN's exact fit matrices (M1/M2)** aren't replicated — the middle of a
-   name uses generic frequency-weighted vowel↔consonant adjacency, so e.g. debug
-   no longer keeps its B/C vowel sets disjoint (strategy A still does, exactly).
-   M1/M2 columns are a fit-distance index the generator derives from
-   (position, struct length) via `>>1`; porting it means transliterating the
-   144KB generator.
-2. **Special/soft letters (SPCCON)** aren't expanded: elements carry internal
-   codes (digits 0-3, lowercase like the `d` in `EdE`) that should map back to
-   real letter sequences on output. `splitting.mark_special` is the stub hook.
+DONE since: **special-letter expansion** and **library extraction**.
+- `qch.expand_special()` reverses soft consonants (lowercase X -> XH) and SPCCON
+  custom clusters (digit codes index `list_e04`, e.g. greek 0=SS/1=PH). 329/330
+  chapters now generate with no leftover marker codes.
+- `pyebon/library.py` extracts every chapter to `library/<name>.json` (our own
+  format; a serialized `Chapter`). `python -m pyebon.library extract` rebuilt all
+  **331** chapters (~13 MB); `load_chapter()` reads them and the CLI accepts a
+  bare library name (`python -m pyebon core_QUENYA`). The engine **no longer
+  needs `Ebon/` at runtime** — the library is committed. The 12 encrypted
+  `core/*.EBN` correctly fall back to their `.qch`.
 
-Next: optionally (a) expand special letters, (b) port the M1/M2 fit engine, then
-extract **all 330 chapters into our JSON format** so the engine no longer needs
-`Ebon/` at runtime.
+One known fidelity gap remains (optional; the "inspiration" goal is met):
+- **EBoN's exact fit matrices (M1/M2)** aren't replicated — the middle of a name
+  uses generic frequency-weighted vowel↔consonant adjacency, so e.g. debug no
+  longer keeps its B/C vowel sets disjoint via the `.qch` path (strategy A from
+  seeds still does, exactly). M1/M2 columns are a fit-distance index the
+  generator derives from (position, struct length) via `>>1`; porting it means
+  transliterating the 144KB generator (`re/ebonW_00420730.c`).
 
 ## Conventions
 

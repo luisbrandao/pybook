@@ -1,20 +1,27 @@
 """CLI: generate names from a chapter.
 
-    python -m pyebon <chapter.ebn> [-n COUNT] [-m MIN] [-x MAX] [-s SEED]
+    python -m pyebon <chapter> [-n COUNT] [-m MIN] [-x MAX] [-s SEED]
 
-Accepts a plaintext .ebn file (strategy A). .qch support is added separately.
+`<chapter>` may be:
+  * a library chapter name (e.g. `core_QUENYA`) — reads library/<name>.json,
+  * a path to one of our `.json` library files,
+  * a plaintext `.ebn` seed file (strategy A), or
+  * an EBoN compiled `.qch` file (strategy B).
+Run `python -m pyebon.library extract` once to build the library/ folder.
 """
 
 import argparse
+import os
 import sys
 
 from .ebn import load_ebn
 from .generate import Generator, GenerationError
+from .library import LIBRARY_DIR, load_chapter
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="pyebon", description="Everchanging Book of Names (reimplementation).")
-    p.add_argument("chapter", help="path to a .ebn chapter file")
+    p.add_argument("chapter", help="library chapter name, or path to a .json/.ebn/.qch file")
     p.add_argument("-n", "--count", type=int, default=20, help="how many names (default 20)")
     p.add_argument("-m", "--min", dest="min_len", type=int, default=2)
     p.add_argument("-x", "--max", dest="max_len", type=int, default=30)
@@ -22,15 +29,17 @@ def main(argv=None):
     p.add_argument("--info", action="store_true", help="print chapter info and exit")
     args = p.parse_args(argv)
 
-    # .qch (compiled, incl. locked chapters) or .ebn (plaintext seeds).
-    if args.chapter.lower().endswith(".qch"):
+    chapter = args.chapter
+    lib_candidate = os.path.join(LIBRARY_DIR, chapter + ".json")
+    if chapter.lower().endswith(".json"):
+        ch = load_chapter(chapter)
+    elif os.path.isfile(lib_candidate):
+        ch = load_chapter(lib_candidate)             # bare library chapter name
+    elif chapter.lower().endswith(".qch"):
         from .qch import qch_to_chapter
-        ch, _ = qch_to_chapter(args.chapter, fit=1)
-        print("(note: .qch chapters use real elements/structures/prefix+suffix; "
-              "EBoN's exact fit matrices are not yet replicated, and special "
-              "letters are not yet expanded)", file=sys.stderr)
+        ch, _ = qch_to_chapter(chapter, fit=1)
     else:
-        ch = load_ebn(args.chapter)
+        ch = load_ebn(chapter)
 
     if args.info:
         print(f"{ch.title} — {ch.line1} {ch.line2} (by {ch.author})")
