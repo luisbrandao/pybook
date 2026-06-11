@@ -23,20 +23,40 @@ class Generator:
     def __init__(self, chapter: Chapter, seed: Optional[int] = None):
         self.ch = chapter
         self.rng = random.Random(seed)
+        # Skip-level (fit 2/3) checks only apply when the chapter actually has
+        # distance-2 data; .qch-derived chapters don't, so they stay at fit:1.
+        self.has_adj2 = bool(getattr(chapter, "adj2", None))
 
     # --- helpers ---------------------------------------------------------- #
     def _pool(self, cat: str):
         return self.ch.vowel_elements if cat == "V" else self.ch.cons_elements
 
+    def _cat(self, elem: str) -> str:
+        return "V" if elem in self.ch.vowel_elements else "C"
+
     def _weighted_pick(self, items: List[str], weights: List[float]) -> str:
         return self.rng.choices(items, weights=weights, k=1)[0]
 
-    def _candidates(self, prev: str, cat: str, is_last: bool) -> List[Tuple[str, float]]:
-        """Elements of `cat` that may follow `prev`, with weights."""
+    def _skip_required(self, cat: str) -> bool:
+        """Does the current fit level enforce distance-2 adjacency for `cat`?
+
+        fit:2 = consonant-skip-vowel (check when placing a consonant);
+        fit:3 = also vowel-skip-consonant (check when placing a vowel).
+        """
+        if not self.has_adj2:
+            return False
+        opts = self.ch.opts
+        return (opts.fit >= 2 and cat == "C") or (opts.fit >= 3 and cat == "V")
+
+    def _candidates(self, prev: str, prev2: Optional[str], cat: str,
+                    is_last: bool) -> List[Tuple[str, float]]:
+        """Elements of `cat` that may follow `prev` (two back: `prev2`)."""
         opts = self.ch.opts
         pool = self._pool(cat)
         out: List[Tuple[str, float]] = []
         succ = self.ch.successors(prev)
+        succ2 = self.ch.successors2(prev2) if prev2 is not None else None
+        skip = self._skip_required(cat) and prev2 is not None
         for elem, freq in pool.items():
             if opts.fit >= 1:
                 edge = succ.get(elem, 0)
@@ -45,13 +65,25 @@ class Generator:
                 # Last slot must be able to end a name.
                 if is_last and self.ch.successors(elem).get(END, 0) == 0:
                     continue
+                # fit 2/3: the element two back must also have been a skip-neighbor.
+                if skip and succ2.get(elem, 0) == 0:
+                    continue
                 weight = edge if opts.statgen else 1.0
             else:
-                if is_last and opts.fit >= 1:
-                    pass
                 weight = freq if opts.statgen else 1.0
             out.append((elem, float(weight)))
         return out
+
+    def _pick_pair(self, pool, cats: Tuple[str, str]):
+        """Pick a (e1, e2) pair from a prefix/suffix pool matching `cats`."""
+        opts = self.ch.opts
+        items = [(p, c) for p, c in pool.items()
+                 if (self._cat(p[0]), self._cat(p[1])) == cats]
+        if not items:
+            return None
+        pairs = [p for p, _ in items]
+        weights = [float(c) if opts.statgen else 1.0 for _, c in items]
+        return self.rng.choices(pairs, weights=weights, k=1)[0]
 
     # --- structure selection --------------------------------------------- #
     def _pick_structure(self) -> Tuple[str, ...]:
@@ -65,26 +97,72 @@ class Generator:
         return self.rng.choice(structs)
 
     # --- the walk --------------------------------------------------------- #
+    def _pins(self, structure: Tuple[str, ...]):
+        """Forced slots from the prefix/suffix pools (or None if unsatisfiable).
+
+        Returns (pins, pair_internal): `pins` maps slot index -> element; slots
+        in `pair_internal` get their incoming adjacency for free (they are the
+        second element of a real pool pair, or the START opener).
+        """
+        opts = self.ch.opts
+        n = len(structure)
+        pins, pair_internal = {}, set()
+        if opts.prefix and n >= 2 and self.ch.prefixes:
+            pair = self._pick_pair(self.ch.prefixes, (structure[0], structure[1]))
+            if pair is None:
+                return None
+            pins[0], pins[1] = pair
+            pair_internal.update({0, 1})
+        if opts.suffix and n >= 2 and self.ch.suffixes:
+            pair = self._pick_pair(self.ch.suffixes, (structure[-2], structure[-1]))
+            if pair is None:
+                return None
+            # Reconcile with any prefix pins that overlap (short structures).
+            if (n - 2 in pins and pins[n - 2] != pair[0]) or \
+               (n - 1 in pins and pins[n - 1] != pair[1]):
+                return None
+            pins[n - 2], pins[n - 1] = pair
+            pair_internal.add(n - 1)  # the seam INTO n-2 is still checked
+        return pins, pair_internal
+
     def _walk(self, structure: Tuple[str, ...]) -> Optional[List[str]]:
         """Randomized DFS filling each slot; returns element list or None."""
         n = len(structure)
+        pinned = self._pins(structure)
+        if pinned is None:
+            return None  # prefix/suffix required but no matching pair this structure
+        pins, pair_internal = pinned
         result: List[str] = []
 
-        def dfs(i: int, prev: str) -> bool:
+        def dfs(i: int) -> bool:
             if i == n:
-                # At fit 0 we still want a sensible ending; otherwise the
-                # adjacency check already guaranteed an END-capable last elem.
                 return True
+            prev = result[i - 1] if i >= 1 else START
+            prev2 = result[i - 2] if i >= 2 else None  # None until a real 2-back elem
             cat = structure[i]
             is_last = i == n - 1
-            cands = self._candidates(prev, cat, is_last)
+            if i in pins:
+                elem = pins[i]
+                # Check the incoming seam unless this slot is guaranteed valid
+                # (slot 0 opener, or the second element of its own pool pair).
+                if self.ch.opts.fit >= 1 and i != 0 and i not in pair_internal:
+                    if self.ch.successors(prev).get(elem, 0) == 0:
+                        return False
+                    if self._skip_required(cat) and prev2 is not None \
+                            and self.ch.successors2(prev2).get(elem, 0) == 0:
+                        return False
+                result.append(elem)
+                if dfs(i + 1):
+                    return True
+                result.pop()
+                return False
+
+            cands = self._candidates(prev, prev2, cat, is_last)
             if not cands:
                 return False
-            items = [c for c, _ in cands]
-            weights = [w for _, w in cands]
-            # Try candidates in weighted-random order, backtracking on dead ends.
+            pool_items = [c for c, _ in cands]
+            pool_w = [w for _, w in cands]
             order: List[str] = []
-            pool_items, pool_w = items[:], weights[:]
             while pool_items:
                 pick = self._weighted_pick(pool_items, pool_w)
                 idx = pool_items.index(pick)
@@ -92,12 +170,12 @@ class Generator:
                 order.append(pick)
             for elem in order:
                 result.append(elem)
-                if dfs(i + 1, elem):
+                if dfs(i + 1):
                     return True
                 result.pop()
             return False
 
-        return result if dfs(0, START) else None
+        return result if dfs(0) else None
 
     # --- validation ------------------------------------------------------- #
     def _valid(self, name: str) -> bool:

@@ -83,6 +83,12 @@ class Chapter:
     # followed a. Keys/values include START and END sentinels.
     adj: Dict[str, Counter] = field(default_factory=dict)
 
+    # Distance-2 ("skip") adjacency: adj2[a] counts elements seen two positions
+    # after a (same category, since categories alternate). This is what EBoN's
+    # fit levels 2/3 check: consonant-skip-vowel (C..C) and vowel-skip-consonant
+    # (V..V). Populated by the seed preprocessor; empty for .qch-derived chapters.
+    adj2: Dict[str, Counter] = field(default_factory=dict)
+
     # Structures as tuples of 'C'/'V' (one entry per element), with frequency.
     structures: Counter = field(default_factory=Counter)
 
@@ -92,6 +98,9 @@ class Chapter:
 
     def add_edge(self, a: str, b: str) -> None:
         self.adj.setdefault(a, Counter())[b] += 1
+
+    def add_edge2(self, a: str, b: str) -> None:
+        self.adj2.setdefault(a, Counter())[b] += 1
 
     # --- serialization (our own JSON library format) --------------------- #
     def to_dict(self) -> dict:
@@ -109,6 +118,7 @@ class Chapter:
             "cons_elements": dict(self.cons_elements),
             # adjacency as {a: {b: count}}
             "adj": {a: dict(succ) for a, succ in self.adj.items()},
+            "adj2": {a: dict(succ) for a, succ in self.adj2.items()},
             # tuple-keyed counters as [[items...], count] pairs
             "structures": [[list(k), v] for k, v in self.structures.items()],
             "prefixes": [[list(k), v] for k, v in self.prefixes.items()],
@@ -132,6 +142,7 @@ class Chapter:
         ch.vowel_elements = Counter(d.get("vowel_elements", {}))
         ch.cons_elements = Counter(d.get("cons_elements", {}))
         ch.adj = {a: Counter(succ) for a, succ in d.get("adj", {}).items()}
+        ch.adj2 = {a: Counter(succ) for a, succ in d.get("adj2", {}).items()}
         ch.structures = Counter({tuple(k): v for k, v in d.get("structures", [])})
         ch.prefixes = Counter({tuple(k): v for k, v in d.get("prefixes", [])})
         ch.suffixes = Counter({tuple(k): v for k, v in d.get("suffixes", [])})
@@ -139,6 +150,9 @@ class Chapter:
 
     def successors(self, a: str) -> Counter:
         return self.adj.get(a, Counter())
+
+    def successors2(self, a: str) -> Counter:
+        return self.adj2.get(a, Counter())
 
     @staticmethod
     def is_vowel_element(elem: str) -> bool:

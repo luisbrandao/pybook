@@ -43,6 +43,11 @@ def build_chapter(names: List[str], opts: GenOpts | None = None, **meta) -> Chap
             ch.add_edge(a, b)
         ch.add_edge(keys[-1], END)
 
+        # Distance-2 (skip) adjacency for fit levels 2/3: element -> element two
+        # positions later (same category, since categories alternate).
+        for a, b in zip(keys, keys[2:]):
+            ch.add_edge2(a, b)
+
         # Structure frequency.
         ch.structures[structure_of(elements)] += 1
 
