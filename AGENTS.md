@@ -77,34 +77,45 @@ Luis, Planetas) vs **326 locked** (`.qch`-only: all official Tolkien / Greyhawk 
 Wheel of Time / Forgotten Realms / Star Trek / euro-gods / old-world libraries,
 incl. the 12 encrypted `core/*.EBN`). Cracking the matrices unlocks 326 chapters.
 
-## Current task (#5): decode the `.qch` adjacency/frequency matrices
+## Current task (#5 DONE — format cracked via decompilation)
 
-This is the gate to full-quality generation from the 326 locked chapters.
-Without it, `qch_to_chapter` only supports fit:0 (rough — real vowel elements and
-structures but random consonant placement).
+The `.qch` format is **fully decoded and validated** (lands exactly on `#END`
+for debug/Luis/klingon). We decompiled EBoN.exe with Ghidra headless — writer
+`0x41b6e1`, reader `0x41cd90`, generator `0x420730` — see
+`Doc/qch-writer-decompiled.md` and the faithful parser `re/parse_qch.py`. RE
+artifacts/scripts live in `re/`. Key corrections to earlier guesses:
 
-What we know (details in `Doc/qch-format-notes.md`):
-- The matrix region starts right after the vowel list (klingon: ~0x10c) and runs
-  to a `#END` terminator. It's sparse little-endian `uint16` tables.
-- Per Doc/3, consonants are fit as **single letters** (no consonant-element
-  strings are stored); vowels as **whole elements**.
-- Index spaces: **consonant letters by position in the alphabet field**; **vowel
-  elements by position in the vowel list** (both come straight from the decoder).
+- **Numeric cells are BIG-ENDIAN uint16** (high byte first). This was the whole
+  blocker; little-endian searches could never match.
+- **Consonant elements ARE stored** (multi-letter clusters, e.g. Klingon
+  `KT/TB/NN`). The old "consonants are single letters only" note was wrong.
+- `nV = f[0xe58]` is the matrix inner (fit-distance) dimension, not vowel count.
+- **Prefix/suffix** entries are 3-byte keys `(idxA, idxB, tag)` (tag `'C'`=0x43
+  → consonant-then-vowel, `'V'`=0x56 → vowel-then-consonant), then BE16 freqs.
+  Validated on debug: prefixes BA/CO, suffixes BI/CY (its seeds' open/close).
+- Structures = BE16 freq table indexed by EBoN structure number, plus
+  substructure counts/freqs/labels; then bit-packed validity masks; then 2×127
+  validation bytes; then `#END` (no trailing NUL).
 
-Method to crack it (in progress):
-- Use Klingon (we have both `.ebn` seeds and `.qch`). Recompute its expected
-  adjacency from the seeds using the qch's element orderings, then search the
-  byte region for the matching sub-blocks (try both row/col-major) to deduce
-  each matrix's offset, dimensions, and meaning (L1 C↔V, L2 C↔C, L3 V↔V,
-  start/end, prefix/suffix). NOTE: a few seed names contain letters absent from
-  the compiled alphabet (e.g. F, X) — EBoN rejected those names; skip them when
-  recomputing.
-- Earlier matrix dumps showed values that were multiples of 256 → there is a
-  **1-byte alignment subtlety**; check odd/even start offsets.
+`pyebon/qch.py` now uses this parser and feeds the engine **real** vowel +
+consonant element pools, the structure distribution, and prefix/suffix START/END
+edges (authentic openings/closings). Locked chapters generate clearly on-theme
+(Quenya: Nahima, Tintaner, Eranoon; Sindarin: Urnir, Gindered, Hirnosir).
 
-Once decoded: populate `Chapter.adj` (with weights) from the qch, raise the
-bridge to full `fit`, then extract **all 330 chapters into our JSON format** so
-the engine no longer needs `Ebon/` at runtime.
+Two known fidelity gaps remain (both optional, "inspiration" goal is met):
+1. **EBoN's exact fit matrices (M1/M2)** aren't replicated — the middle of a
+   name uses generic frequency-weighted vowel↔consonant adjacency, so e.g. debug
+   no longer keeps its B/C vowel sets disjoint (strategy A still does, exactly).
+   M1/M2 columns are a fit-distance index the generator derives from
+   (position, struct length) via `>>1`; porting it means transliterating the
+   144KB generator.
+2. **Special/soft letters (SPCCON)** aren't expanded: elements carry internal
+   codes (digits 0-3, lowercase like the `d` in `EdE`) that should map back to
+   real letter sequences on output. `splitting.mark_special` is the stub hook.
+
+Next: optionally (a) expand special letters, (b) port the M1/M2 fit engine, then
+extract **all 330 chapters into our JSON format** so the engine no longer needs
+`Ebon/` at runtime.
 
 ## Conventions
 

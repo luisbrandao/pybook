@@ -25,8 +25,10 @@ def main(argv=None):
     # .qch (compiled, incl. locked chapters) or .ebn (plaintext seeds).
     if args.chapter.lower().endswith(".qch"):
         from .qch import qch_to_chapter
-        ch, _ = qch_to_chapter(args.chapter, fit=0)
-        print("(note: .qch generation is fit:0 only — adjacency not yet decoded)", file=sys.stderr)
+        ch, _ = qch_to_chapter(args.chapter, fit=1)
+        print("(note: .qch chapters use real elements/structures/prefix+suffix; "
+              "EBoN's exact fit matrices are not yet replicated, and special "
+              "letters are not yet expanded)", file=sys.stderr)
     else:
         ch = load_ebn(args.chapter)
 
