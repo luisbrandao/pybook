@@ -84,6 +84,38 @@ into the stream, so a parser reads each count then loops.
 38. **127 × u8** `f[0x34078+i*4]` (validation/letter-freq table B)
 39. **str** `"#END"` (DAT_0049859d)
 
+## VALIDATED against reader + known seeds (corrections to the above)
+
+Cross-checked with the **reader** (`EBoN.exe:0x41cd90`, `re/qch_reader_decompiled.c`)
+and a faithful Python parser (`re/parse_qch.py`) that lands **exactly on `#END`**
+for debug, Luis, and Klingon. Corrections/confirmations:
+
+- **3-byte preamble** before the magic (`00 68 01` in debug); magic is then
+  read-and-discarded for validation.
+- **`nV = f[0xe58]`** is the matrix inner dimension, **not** the vowel count:
+  debug=6, Luis=8, Klingon=7. It tracks the max structure length / fit window.
+- **Consonant elements ARE stored** — `list48` is the consonant-element list
+  (multi-letter clusters: Klingon has 114 incl. `KT, TB, NN, BR`). This
+  **overturns** the earlier "consonants are single letters only" assumption.
+  So: `list44` = vowel elements, `list48` = consonant elements.
+- **M1** `[len(list44) × nV]` and **M2** `[len(list48) × nV]` are BE16 freq
+  tables: `M1` over vowel elements, `M2` over consonant elements. Columns are a
+  **fit-distance index** the generator computes from (position, struct length)
+  via `>>1` halving — EBoN's L1/L2/L3 fitting, not a plain adjacency/position.
+- **Prefix/suffix entries are 3 bytes each, NO string**: `(elemA, elemB, tag)`
+  where `tag==0x56('V')` means elemB is the vowel (else elemA); the vowel index
+  is stored +100 internally. Followed by `nPre`/`nSuf` BE16 frequencies.
+  VALIDATED on debug seeds: prefixes `(0,0)`→BA, `(1,3)`→CO; suffixes
+  `(0,2)`→BI, `(1,5)`→CY. Element indices: consonants by `list48` position,
+  vowels by `list44` position.
+- **Structures**: `u8 count` = (max nonzero structure index)+1 (debug=9 because
+  structure #8 = CVCVCV is the only one used); then `count` BE16 struct freqs,
+  `count` BE16 substructure-counts, then nested BE16 substructure freqs and
+  nested NUL-terminated substructure labels (debug: `"111111"`).
+- **`#END`** is the last 4 bytes with **no trailing NUL**.
+
+The full validated read order lives in `re/parse_qch.py`.
+
 ## What this unlocks
 
 M1 (`0x3e5c`) and M2 (`0x13e5c`) are the two big [count × nV] frequency
