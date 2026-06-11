@@ -75,6 +75,7 @@ class QchChapter:
 
     consonants: str = ""                 # the consonant alphabet (single letters)
     nV: int = 0                          # matrix inner (fit-distance) dimension
+    special_clusters: List[str] = field(default_factory=list)  # SPCCON: digit code N -> clusters[N]
 
     vowel_elements: List[str] = field(default_factory=list)   # list44
     cons_elements: List[str] = field(default_factory=list)    # list48
@@ -111,6 +112,29 @@ class QchChapter:
             return vowel(a), cons(b)
         else:            # 'C' -> consonant, vowel
             return cons(a), vowel(b)
+
+
+def expand_special(elem: str, clusters: List[str]) -> str:
+    """Expand EBoN's internal special-letter codes back to real letters.
+
+    EBoN marks special letters before splitting (Doc/3 step 1):
+      * a *soft consonant* (a consonant followed by H, e.g. TH/DH/SH) is stored
+        as that consonant in **lowercase** -> expand X -> XH;
+      * a *custom SPCCON cluster* (e.g. SS, PH) is stored as a **digit** 0-9 ->
+        expand to clusters[digit].
+    Clusters may themselves contain soft (lowercase) letters, so we expand
+    digits first, then soft consonants, in a single left-to-right pass.
+    """
+    if not elem:
+        return elem
+    # Pass 1: digits -> their cluster strings.
+    if any(c.isdigit() for c in elem):
+        elem = "".join(clusters[int(c)] if (c.isdigit() and int(c) < len(clusters)) else c
+                        for c in elem)
+    # Pass 2: soft consonants (lowercase letters) -> uppercase + H.
+    if any(c.islower() for c in elem):
+        elem = "".join(c.upper() + "H" if c.islower() else c for c in elem)
+    return elem
 
 
 def structure_pattern(num):
@@ -170,7 +194,7 @@ def decode_qch(path: str) -> QchChapter:
     ch.M2 = [[r.u16() for _ in range(ch.nV)] for _ in range(n48)]
 
     ne04 = r.u8()
-    _list_e04 = [r.cstr() for _ in range(ne04)]
+    ch.special_clusters = [r.cstr() for _ in range(ne04)]  # SPCCON custom clusters
 
     nPre = r.u16()
     ch.pre_keys = [(r.u8(), r.u8(), r.u8()) for _ in range(nPre)]
@@ -216,12 +240,15 @@ def qch_to_chapter(path: str, fit: int = 1):
     )
 
     # Element pools, weighted by their total fit frequency (row sum of M1/M2).
+    # Element strings are expanded from EBoN's special-letter codes to real
+    # letters (soft consonants, SPCCON clusters) so generated names read right.
+    cl = d.special_clusters
     for i, v in enumerate(d.vowel_elements):
         w = sum(d.M1[i]) if i < len(d.M1) else 0
-        ch.vowel_elements[v] += max(1, w)
+        ch.vowel_elements[expand_special(v, cl)] += max(1, w)
     for i, c in enumerate(d.cons_elements):
         w = sum(d.M2[i]) if i < len(d.M2) else 0
-        ch.cons_elements[c] += max(1, w)
+        ch.cons_elements[expand_special(c, cl)] += max(1, w)
 
     # Structures from the frequency table (index = EBoN structure number).
     for num, freq in enumerate(d.struct_freq):
@@ -250,6 +277,7 @@ def qch_to_chapter(path: str, fit: int = 1):
         (_ca, ea), (_cb, eb) = d.resolve_key(key)
         if not ea or not eb:
             continue
+        ea, eb = expand_special(ea, cl), expand_special(eb, cl)
         w = max(1, freq)
         ch.prefixes[(ea, eb)] += w
         ch.adj.setdefault(START, Counter())[ea] += w
@@ -261,6 +289,7 @@ def qch_to_chapter(path: str, fit: int = 1):
         (_ca, ea), (_cb, eb) = d.resolve_key(key)
         if not ea or not eb:
             continue
+        ea, eb = expand_special(ea, cl), expand_special(eb, cl)
         w = max(1, freq)
         ch.suffixes[(ea, eb)] += w
         ch.adj.setdefault(ea, Counter())[eb] += w
