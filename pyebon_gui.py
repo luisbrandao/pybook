@@ -78,8 +78,16 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("pyebon — Everchanging Book of Names")
-        self.geometry("920x580")
+        # Open maximized; the geometry below is the fallback (double the old
+        # 920x580 default, clamped to the screen) for WMs that ignore -zoomed.
+        w = min(1840, self.winfo_screenwidth())
+        h = min(1160, self.winfo_screenheight())
+        self.geometry(f"{w}x{h}")
         self.minsize(720, 460)
+        try:
+            self.attributes("-zoomed", True)   # maximize (X11 / XWayland)
+        except tk.TclError:
+            pass
         self.configure(background=self.BG)
 
         try:
@@ -276,6 +284,8 @@ class App(tk.Tk):
         bar.grid(row=3, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(bar, text="Copy", command=self.copy).pack(side=tk.LEFT)
         ttk.Button(bar, text="Save…", command=self.save).pack(side=tk.LEFT, padx=6)
+        self.edit_btn = ttk.Button(bar, text="Edit chapter", command=self.edit_selected)
+        self.edit_btn.pack(side=tk.LEFT)
         self.status = ttk.Label(bar, text="", style="Hint.TLabel")
         self.status.pack(side=tk.RIGHT)
 
@@ -347,6 +357,7 @@ class App(tk.Tk):
         if not it:
             return
         label, kind, path = it
+        self.edit_btn.config(state="normal" if kind == "txt" else "disabled")
         try:
             ch = self._get_chapter(kind, path)
         except Exception as exc:
@@ -482,7 +493,13 @@ class App(tk.Tk):
         tab.rowconfigure(2, weight=1)
 
         # left: the seed-name editor
-        ttk.Label(tab, text="Seed names", font=self.font_h).grid(row=0, column=0, sticky="w")
+        self.edit_path = None                      # file currently being edited
+        hdr = ttk.Frame(tab)
+        hdr.grid(row=0, column=0, sticky="ew", padx=(0, 12))
+        hdr.columnconfigure(0, weight=1)
+        ttk.Label(hdr, text="Seed names", font=self.font_h).grid(row=0, column=0, sticky="w")
+        self.edit_label = ttk.Label(hdr, text="new chapter", style="Hint.TLabel")
+        self.edit_label.grid(row=0, column=1, sticky="e")
         ttk.Label(tab, text="One name per line. The more you give (30+), the richer the chapter.",
                   style="Hint.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 6))
 
@@ -503,8 +520,10 @@ class App(tk.Tk):
         seedbar = ttk.Frame(tab)
         seedbar.grid(row=3, column=0, sticky="ew", pady=(8, 0), padx=(0, 12))
         ttk.Button(seedbar, text="Load .txt…", command=self.load_seed_file).pack(side=tk.LEFT)
-        ttk.Button(seedbar, text="Clear", command=lambda: self.seed_text.delete("1.0", tk.END)).pack(
-            side=tk.LEFT, padx=6)
+        ttk.Button(seedbar, text="Sort", command=self.sort_seeds).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(seedbar, text="Dedup", command=self.dedup_seeds).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(seedbar, text="Clear", command=lambda: self._set_editor("")).pack(
+            side=tk.LEFT, padx=(6, 0))
         self.seed_count = ttk.Label(seedbar, text="0 names", style="Hint.TLabel")
         self.seed_count.pack(side=tk.RIGHT)
 
@@ -531,8 +550,11 @@ class App(tk.Tk):
         prevbar.grid(row=3, column=1, sticky="ew", pady=(8, 0))
         ttk.Button(prevbar, text="Preview  ▸", style="Big.TButton",
                    command=self.preview_chapter).pack(side=tk.LEFT)
-        ttk.Button(prevbar, text="Save chapter…", command=self.save_seed_chapter).pack(
-            side=tk.LEFT, padx=8)
+        ttk.Button(prevbar, text="Save", command=self.save_seed_chapter).pack(
+            side=tk.LEFT, padx=(8, 0))
+        ttk.Button(prevbar, text="Save as…",
+                   command=lambda: self.save_seed_chapter(save_as=True)).pack(
+            side=tk.LEFT, padx=(6, 0))
         self.build_status = ttk.Label(prevbar, text="", style="Hint.TLabel")
         self.build_status.pack(side=tk.RIGHT)
 
@@ -544,6 +566,15 @@ class App(tk.Tk):
             self.seed_count.config(text=f"{len(self._seed_lines())} names")
             self.seed_text.edit_modified(False)
 
+    def _set_editor(self, text, path=None):
+        """Fill the seed editor and remember which file (if any) it edits."""
+        self.seed_text.delete("1.0", tk.END)
+        if text:
+            self.seed_text.insert("1.0", text)
+        self.edit_path = pathlib.Path(path).resolve() if path else None
+        self.edit_label.config(
+            text=f"editing  {self.edit_path.name}" if self.edit_path else "new chapter")
+
     def load_seed_file(self):
         path = filedialog.askopenfilename(initialdir=str(CHAPTERS_DIR),
                                           filetypes=[("Text", "*.txt"), ("All", "*.*")])
@@ -554,9 +585,49 @@ class App(tk.Tk):
         except Exception as exc:
             messagebox.showerror("Could not read file", str(exc))
             return
-        self.seed_text.delete("1.0", tk.END)
-        self.seed_text.insert("1.0", text)
+        self._set_editor(text, path)
         self.build_status.config(text=f"loaded {pathlib.Path(path).name}")
+
+    def edit_selected(self):
+        """Open the chapter selected on the Generate tab in the builder."""
+        it = self._selected()
+        if not it:
+            return
+        label, kind, path = it
+        if kind != "txt":
+            messagebox.showinfo(
+                "Library book",
+                "Library books are compiled — they carry derived statistics, not "
+                "the original name list, so there is nothing to edit. Only your "
+                "data/seeds/*.txt chapters can be edited.")
+            return
+        try:
+            text = open(path, encoding="utf-8").read()
+        except Exception as exc:
+            messagebox.showerror("Could not read file", str(exc))
+            return
+        self._set_editor(text, path)
+        self.build_status.config(text=f"loaded {pathlib.Path(path).name}")
+        self.notebook.select(1)
+
+    def sort_seeds(self):
+        lines = self._seed_lines()
+        self._set_editor("\n".join(sorted(lines, key=str.casefold)), self.edit_path)
+        self.build_status.config(text=f"sorted {len(lines)} names")
+
+    def dedup_seeds(self):
+        lines = self._seed_lines()
+        seen, out = set(), []
+        for name in lines:
+            key = name.casefold()
+            if key not in seen:
+                seen.add(key)
+                out.append(name)
+        removed = len(lines) - len(out)
+        self._set_editor("\n".join(out), self.edit_path)
+        self.build_status.config(
+            text=f"removed {removed} duplicate{'s' if removed != 1 else ''}"
+            if removed else "no duplicates")
 
     def _build_from_editor(self):
         """Build a Chapter from the editor; returns (chapter, used, skipped) or None."""
@@ -596,27 +667,42 @@ class App(tk.Tk):
             note += f", {misses} misses"
         self.build_status.config(text=note)
 
-    def save_seed_chapter(self):
+    def save_seed_chapter(self, save_as=False):
         lines = self._seed_lines()
         if not lines:
             messagebox.showinfo("Nothing to save", "The seed list is empty.")
             return
-        CHAPTERS_DIR.mkdir(parents=True, exist_ok=True)
-        path = filedialog.asksaveasfilename(
-            initialdir=str(CHAPTERS_DIR), defaultextension=".txt",
-            initialfile="my_chapter.txt",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")])
-        if not path:
-            return
+        if save_as or not self.edit_path:
+            CHAPTERS_DIR.mkdir(parents=True, exist_ok=True)
+            path = filedialog.asksaveasfilename(
+                initialdir=str(CHAPTERS_DIR), defaultextension=".txt",
+                initialfile=self.edit_path.name if self.edit_path else "my_chapter.txt",
+                filetypes=[("Text", "*.txt"), ("All", "*.*")])
+            if not path:
+                return
+            is_new = True
+        else:
+            path = str(self.edit_path)
+            is_new = False
         open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
 
         p = pathlib.Path(path).resolve()
+        self.edit_path = p
+        self.edit_label.config(text=f"editing  {p.name}")
+        # Drop any cached build of this file so the Generate tab sees the edit.
+        self._chapter_cache.pop(path, None)
+        self._chapter_cache.pop(str(p), None)
+
         if p.parent != CHAPTERS_DIR.resolve():
             self.build_status.config(text=f"saved {p.name} (outside data/seeds — won't be listed)")
             return
 
-        # It's a chapter now: refresh the Generate tab and jump to it.
-        self._chapter_cache.pop(str(p), None)
+        if not is_new:
+            # In-place save while editing: stay on the builder.
+            self.build_status.config(text=f"saved {p.name}")
+            return
+
+        # A new chapter: refresh the Generate tab and jump to it.
         self.all_items = discover_chapters()
         self.search_var.set("")
         self._refresh_list()
