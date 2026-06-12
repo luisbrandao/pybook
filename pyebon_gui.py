@@ -25,6 +25,7 @@ from pyebon import library as lib
 from pyebon.library import LIBRARY_DIR, load_chapter, compile_seed
 from pyebon.preprocess import build_chapter
 from pyebon.generate import Generator, GenerationError, make_generator
+from pyebon.blend import blend_chapters
 from pyebon.splitting import split_elements
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -100,6 +101,7 @@ class App(tk.Tk):
         self._build_layout()
         self._refresh_books()
         self._select_default_book()
+        self._refresh_blend_options()
 
     # ---- styling -------------------------------------------------------- #
     def _style(self):
@@ -298,6 +300,18 @@ class App(tk.Tk):
                                         state="readonly", width=12)
         self.variety_box.grid(row=2, column=5, columnspan=3, sticky="w", pady=(8, 0))
 
+        # Blend: mix the selected (primary) chapter with a second one.
+        self.NO_BLEND = "— none (single chapter) —"
+        self._blend_index = {}
+        self.blend_var = tk.StringVar(value=self.NO_BLEND)
+        self.blend_mix = tk.IntVar(value=50)
+        ttk.Label(ctl, text="Blend with").grid(row=3, column=0, sticky="w", pady=(8, 0))
+        self.blend_box = ttk.Combobox(ctl, textvariable=self.blend_var, state="readonly", width=30)
+        self.blend_box.grid(row=3, column=1, columnspan=5, sticky="w", pady=(8, 0))
+        ttk.Label(ctl, text="primary %").grid(row=3, column=6, sticky="e", padx=(12, 4), pady=(8, 0))
+        ttk.Spinbox(ctl, from_=5, to=95, increment=5, textvariable=self.blend_mix,
+                    width=5).grid(row=3, column=7, sticky="w", pady=(8, 0))
+
         # results
         res = ttk.Frame(right)
         res.grid(row=3, column=0, sticky="nsew")
@@ -428,6 +442,14 @@ class App(tk.Tk):
             self._all_cache = sorted(items, key=lambda it: it[0].lower())
         return self._all_cache
 
+    def _refresh_blend_options(self):
+        """Populate the 'Blend with' list from every chapter (seeds + library)."""
+        items = self._chapters_for_book("all", None)
+        self._blend_index = {label: (kind, path) for label, kind, path in items}
+        self.blend_box.config(values=[self.NO_BLEND] + [it[0] for it in items])
+        if self.blend_var.get() not in self._blend_index:
+            self.blend_var.set(self.NO_BLEND)
+
     def _selected_book(self):
         sel = self.books_box.curselection()
         return self.books[sel[0]] if sel else None
@@ -524,6 +546,22 @@ class App(tk.Tk):
         except Exception as exc:
             messagebox.showerror("Could not load chapter", str(exc))
             return
+
+        # Optional blend with a second chapter (weighted by the "primary %").
+        blended = False
+        bsel = self.blend_var.get()
+        if bsel and bsel != self.NO_BLEND and bsel in self._blend_index:
+            bkind, bpath = self._blend_index[bsel]
+            try:
+                bch = self._get_chapter(bkind, bpath)
+            except Exception as exc:
+                messagebox.showerror("Could not load blend chapter", str(exc))
+                return
+            p = max(5, min(95, self.blend_mix.get())) / 100.0
+            ptitle, btitle = (ch.title or label), (bch.title or bsel)
+            ch = blend_chapters([(ch, p), (bch, 1 - p)],
+                                title=f"{int(p * 100)}% {ptitle} + {int((1 - p) * 100)}% {btitle}")
+            blended = True
 
         ch.opts.fit = int(self.fit_var.get()[0])
         ch.opts.prefix = self.use_prefix.get()
@@ -653,6 +691,14 @@ class App(tk.Tk):
                 "Prefix forces the first two chunks to be a real opening seen in the "
                 "source; Suffix forces the last two to be a real ending. Turn them on "
                 "for names that begin and end like the originals.")
+
+        section("Blend with — mix two cultures",
+                "Pick a second chapter and the result is a weighted mix of both, e.g. "
+                "70% Elven + 30% Klingon for a coherent hybrid. 'Primary %' is the share "
+                "of the chapter selected on the left; the rest goes to the blend partner. "
+                "Each side is balanced by proportion, not raw size, so a tiny list and a "
+                "huge one mix fairly. Works with both engines; leave it on '— none —' for "
+                "a single chapter.")
 
         ttk.Button(frame, text="Close", command=_close).pack(anchor="e", pady=(14, 0))
         win.protocol("WM_DELETE_WINDOW", _close)
@@ -1017,6 +1063,7 @@ class App(tk.Tk):
         # A new chapter: refresh books, jump to My Names, select it.
         self._all_cache = None
         self._refresh_books()
+        self._refresh_blend_options()
         self.search_var.set("")
         for i, (kind, _bid, _title) in enumerate(self.books):
             if kind == "seeds":
