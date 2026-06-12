@@ -257,13 +257,13 @@ class App(tk.Tk):
         self.min_len = tk.IntVar(value=1)
         self.max_len = tk.IntVar(value=14)
         self.seed = tk.StringVar(value="")
-        self._spin(ctl, "Names", self.count, 1, 9999, 0)
-        self._spin(ctl, "Min", self.min_len, 1, 40, 2)
-        self._spin(ctl, "Max", self.max_len, 2, 60, 4)
+        self._spin(ctl, "How many", self.count, 1, 9999, 0)
+        self._spin(ctl, "Shortest", self.min_len, 1, 40, 2)
+        self._spin(ctl, "Longest", self.max_len, 2, 60, 4)
         ttk.Label(ctl, text="Seed").grid(row=0, column=6, padx=(12, 4))
         ttk.Entry(ctl, textvariable=self.seed, width=8).grid(row=0, column=7)
-        ttk.Label(ctl, text="(blank = random)", style="Hint.TLabel").grid(
-            row=0, column=8, padx=(4, 0), sticky="w")
+        ttk.Label(ctl, text="letters per name · seed blank = random",
+                  style="Hint.TLabel").grid(row=0, column=8, padx=(8, 0), sticky="w")
 
         self.FIT_LABELS = ["0 — loose", "1 — adjacency", "2 — skip C", "3 — skip C+V"]
         self.fit_var = tk.StringVar(value=self.FIT_LABELS[1])
@@ -589,9 +589,30 @@ class App(tk.Tk):
         win = tk.Toplevel(self)
         win.title("About the options")
         win.configure(background=self.BG)
-        win.transient(self); win.resizable(False, False)
-        frame = ttk.Frame(win, padding=16)
-        frame.pack(fill=tk.BOTH, expand=True)
+        win.transient(self)
+
+        # Scrollable body, so a tall help text is never cut off on small screens.
+        canvas = tk.Canvas(win, background=self.BG, highlightthickness=0, width=480)
+        vsb = ttk.Scrollbar(win, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        frame = ttk.Frame(canvas, padding=16)
+        inner_id = canvas.create_window((0, 0), window=frame, anchor="nw")
+        frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(inner_id, width=e.width))
+
+        def _wheel(e):
+            step = -1 if getattr(e, "num", None) == 4 else 1 if getattr(e, "num", None) == 5 \
+                else int(-e.delta / 120)
+            canvas.yview_scroll(step, "units")
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            canvas.bind_all(seq, _wheel)
+
+        def _close():
+            for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                canvas.unbind_all(seq)
+            win.destroy()
 
         def section(title, body):
             ttk.Label(frame, text=title, font=self.font_h).pack(anchor="w", pady=(8, 2))
@@ -633,11 +654,18 @@ class App(tk.Tk):
                 "source; Suffix forces the last two to be a real ending. Turn them on "
                 "for names that begin and end like the originals.")
 
-        ttk.Button(frame, text="Close", command=win.destroy).pack(anchor="e", pady=(14, 0))
-        win.bind("<Escape>", lambda e: win.destroy())
+        ttk.Button(frame, text="Close", command=_close).pack(anchor="e", pady=(14, 0))
+        win.protocol("WM_DELETE_WINDOW", _close)
+        win.bind("<Escape>", lambda e: _close())
+
+        # Size to content, but never taller than the screen (then it scrolls).
         win.update_idletasks()
-        x = self.winfo_rootx() + (self.winfo_width() - win.winfo_width()) // 2
-        y = self.winfo_rooty() + 80
+        req_w = frame.winfo_reqwidth() + vsb.winfo_reqwidth() + 4
+        req_h = frame.winfo_reqheight()
+        h = min(req_h, self.winfo_screenheight() - 120)
+        win.geometry(f"{req_w}x{h}")
+        x = self.winfo_rootx() + (self.winfo_width() - req_w) // 2
+        y = self.winfo_rooty() + 60
         win.geometry(f"+{max(0, x)}+{max(0, y)}")
 
     def save(self):
