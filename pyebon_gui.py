@@ -635,12 +635,14 @@ class App(tk.Tk):
 
         seedbar = ttk.Frame(tab)
         seedbar.grid(row=4, column=0, sticky="ew", pady=(8, 0), padx=(0, 12))
-        ttk.Button(seedbar, text="Load .txt…", command=self.load_seed_file).pack(side=tk.LEFT)
+        ttk.Button(seedbar, text="New", command=self.new_chapter).pack(side=tk.LEFT)
+        ttk.Button(seedbar, text="Load .txt…", command=self.load_seed_file).pack(
+            side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Trim", command=self.trim_seeds).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Sort", command=self.sort_seeds).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Dedup", command=self.dedup_seeds).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Odd first", command=self.find_problems).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Button(seedbar, text="Clear", command=lambda: self._set_editor("")).pack(
+        ttk.Button(seedbar, text="Clear", command=lambda: self.seed_text.delete("1.0", tk.END)).pack(
             side=tk.LEFT, padx=(6, 0))
         self.seed_count = ttk.Label(seedbar, text="0 names", style="Hint.TLabel")
         self.seed_count.pack(side=tk.RIGHT)
@@ -736,6 +738,14 @@ class App(tk.Tk):
         self.edit_label.config(
             text=f"editing  {self.edit_path.name}" if self.edit_path else "new chapter")
         self._load_meta_fields(str(self.edit_path) if self.edit_path else None)
+
+    def new_chapter(self):
+        """Start a fresh chapter: empty editor, blank metadata, no edit target."""
+        if self._seed_lines() and not messagebox.askyesno(
+                "New chapter", "Discard the current seed list and start fresh?"):
+            return
+        self._set_editor("")
+        self.build_status.config(text="new chapter")
 
     def load_seed_file(self):
         path = filedialog.askopenfilename(initialdir=str(CHAPTERS_DIR),
@@ -908,6 +918,11 @@ class App(tk.Tk):
             return
 
         if not is_new:
+            # If this chapter is the one selected on the Generate tab, re-run
+            # the selection handler so its metadata panel shows the new values.
+            it = self._selected()
+            if it and pathlib.Path(it[2]).resolve() == p:
+                self._on_chapter_select()
             self.build_status.config(text=f"saved {p.name}")
             return
 
