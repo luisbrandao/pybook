@@ -10,3 +10,4 @@ data/seeds/.compiled/
 data/seeds/ebn*
 # Bulk EBoN name dumps used as distillation sources (kept local; distilled into data/library/)
 data/dumps/
+bruteforce/*
