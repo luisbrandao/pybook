@@ -7,10 +7,48 @@ graph (with START/END boundaries), structures, and prefix/suffix pools.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional, Tuple
 
 from .model import Chapter, GenOpts, START, END
 from .splitting import split_elements, structure_of
+
+
+def parse_seed_text(text: str) -> Tuple[Optional[str], List[str]]:
+    """Split raw seed-list text into an optional description header and names.
+
+    Many EBoN dumps start with a one-line description, a blank line, then the
+    names, e.g.:
+
+        Berber Female Names
+        <blank>
+        Lammemt
+        Tinendjigt
+        ...
+
+    A plain seed list is all names with no blank line near the top. We treat a
+    short leading block (<=3 lines) terminated by a blank line as the header,
+    drop it from the names so it never pollutes the model, and return it so
+    callers can use it as a fallback title/description. Names are stripped and
+    blank-filtered as before.
+    """
+    lines = text.splitlines()
+    first_blank = None
+    for i, ln in enumerate(lines):
+        if not ln.strip():
+            first_blank = i
+            break
+
+    body = lines
+    description = None
+    if first_blank is not None and 0 < first_blank <= 3:
+        head = [ln.strip() for ln in lines[:first_blank] if ln.strip()]
+        rest = [ln.strip() for ln in lines[first_blank + 1:] if ln.strip()]
+        if head and rest:
+            description = " ".join(head)
+            body = lines[first_blank + 1:]
+
+    names = [ln.strip() for ln in body if ln.strip()]
+    return description, names
 
 
 def build_chapter(names: List[str], opts: GenOpts | None = None, **meta) -> Chapter:

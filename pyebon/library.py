@@ -113,7 +113,7 @@ def compile_seed(txt_path: str, force: bool = False) -> Chapter:
     its metadata sidecar is newer than the cache (or `force`). This is what lets
     the GUI/CLI open a seed list instantly instead of re-running build_chapter.
     """
-    from .preprocess import build_chapter
+    from .preprocess import build_chapter, parse_seed_text
 
     cache = compiled_path(txt_path)
     meta_p = seed_meta_path(txt_path)
@@ -124,10 +124,13 @@ def compile_seed(txt_path: str, force: bool = False) -> Chapter:
         return load_chapter(cache)
 
     with open(txt_path, encoding="utf-8") as fh:
-        names = [ln.strip() for ln in fh if ln.strip()]
+        header, names = parse_seed_text(fh.read())
     ch = build_chapter(names)
-    _apply_meta(ch, load_seed_meta(txt_path),
-                os.path.splitext(os.path.basename(txt_path))[0])
+    meta = load_seed_meta(txt_path)
+    if header and "line1" not in meta:
+        # No sidecar description: fall back to the dump's embedded header line.
+        meta = {**meta, "line1": header}
+    _apply_meta(ch, meta, os.path.splitext(os.path.basename(txt_path))[0])
     save_chapter(ch, cache)
     return ch
 
@@ -347,7 +350,7 @@ def distill_into_library(seed_txt: str, ref: str, out_dir: str = LIBRARY_DIR) ->
     preserving its real metadata (title / description / author / date). The
     target is tagged `distilled_from` so `extract` won't clobber it.
     """
-    from .preprocess import build_chapter
+    from .preprocess import build_chapter, parse_seed_text
 
     target = find_chapter(ref, out_dir)
     if not target:
@@ -357,7 +360,7 @@ def distill_into_library(seed_txt: str, ref: str, out_dir: str = LIBRARY_DIR) ->
         meta = json.load(fh)
 
     with open(seed_txt, encoding="utf-8") as fh:
-        names = [ln.strip() for ln in fh if ln.strip()]
+        _header, names = parse_seed_text(fh.read())
     ch = build_chapter(names)
     # keep the original chapter's metadata, not the seed filename
     ch.title = meta.get("title") or ch.title

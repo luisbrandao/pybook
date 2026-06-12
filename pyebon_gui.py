@@ -703,7 +703,9 @@ class App(tk.Tk):
         return {k: v for k, v in meta.items() if v}
 
     def _seed_lines(self):
-        return [ln.strip() for ln in self.seed_text.get("1.0", "end-1c").splitlines() if ln.strip()]
+        from pyebon.preprocess import parse_seed_text
+        _header, names = parse_seed_text(self.seed_text.get("1.0", "end-1c"))
+        return names
 
     def _on_seed_edit(self, _event=None):
         if self.seed_text.edit_modified():
