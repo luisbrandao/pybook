@@ -28,6 +28,9 @@ from .model import Chapter
 _DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 LIBRARY_DIR = os.path.join(_DATA, "library")
 SEEDS_DIR = os.path.join(_DATA, "seeds")
+# Bulk EBoN name dumps (gitignored): big samples of EBoN's own output, one
+# chapter per .txt, distilled into data/library/ to recover full fit data.
+DUMPS_DIR = os.path.join(_DATA, "dumps")
 # Precompiled seed chapters: building a Chapter from a big seed .txt costs real
 # time (~0.3s for 30k names), and the GUI used to re-run it every session. We
 # cache the built Chapter as JSON next to the seeds and reuse it until the .txt
@@ -50,6 +53,16 @@ def save_chapter(ch: Chapter, path: str) -> None:
 def load_chapter(path: str) -> Chapter:
     with open(path, encoding="utf-8") as fh:
         return Chapter.from_dict(json.load(fh))
+
+
+def read_text(path: str) -> str:
+    """Read a name list as text, tolerating EBoN's ANSI (latin-1) dumps."""
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
 
 
 def chapter_title(path: str) -> str:
@@ -123,8 +136,7 @@ def compile_seed(txt_path: str, force: bool = False) -> Chapter:
     if not force and os.path.exists(cache) and os.path.getmtime(cache) >= newest_src:
         return load_chapter(cache)
 
-    with open(txt_path, encoding="utf-8") as fh:
-        header, names = parse_seed_text(fh.read())
+    header, names = parse_seed_text(read_text(txt_path))
     ch = build_chapter(names)
     meta = load_seed_meta(txt_path)
     if header and "line1" not in meta:
@@ -341,14 +353,33 @@ def extract_all(ebon_root: str = "Ebon", out_dir: str = LIBRARY_DIR) -> List[str
     return written
 
 
+def _write_distilled(ch: Chapter, target: str, seed_txt: str) -> None:
+    """Write `ch` over the library chapter at `target`, keeping its metadata.
+
+    The distilled model replaces the chapter's statistics, but its real title /
+    description / author / date (from the .qch) are preserved, and the chapter
+    is tagged `distilled_from` so `extract` won't clobber it.
+    """
+    with open(target, encoding="utf-8") as fh:
+        meta = json.load(fh)
+    ch.title = meta.get("title") or ch.title
+    ch.line1 = meta.get("line1", ch.line1)
+    ch.line2 = meta.get("line2", ch.line2)
+    ch.author = meta.get("author", ch.author)
+    ch.date = meta.get("date", ch.date)
+    d = ch.to_dict()
+    d["distilled_from"] = os.path.basename(seed_txt)
+    with open(target, "w", encoding="utf-8") as fh:
+        json.dump(d, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+
+
 def distill_into_library(seed_txt: str, ref: str, out_dir: str = LIBRARY_DIR) -> str:
     """Replace a library chapter's model with one distilled from a dump of names.
 
     A big sample of EBoN's own output (`seed_txt`) is run through the seed
     preprocessor to recover the full model — including the skip-fit (adj2) data
-    the .qch bridge lacks — then written over the target library chapter while
-    preserving its real metadata (title / description / author / date). The
-    target is tagged `distilled_from` so `extract` won't clobber it.
+    the .qch bridge lacks — then written over the target library chapter.
     """
     from .preprocess import build_chapter, parse_seed_text
 
@@ -356,25 +387,95 @@ def distill_into_library(seed_txt: str, ref: str, out_dir: str = LIBRARY_DIR) ->
     if not target:
         raise FileNotFoundError(f"no library chapter matches {ref!r}")
 
-    with open(target, encoding="utf-8") as fh:
-        meta = json.load(fh)
-
-    with open(seed_txt, encoding="utf-8") as fh:
-        _header, names = parse_seed_text(fh.read())
-    ch = build_chapter(names)
-    # keep the original chapter's metadata, not the seed filename
-    ch.title = meta.get("title") or ch.title
-    ch.line1 = meta.get("line1", ch.line1)
-    ch.line2 = meta.get("line2", ch.line2)
-    ch.author = meta.get("author", ch.author)
-    ch.date = meta.get("date", ch.date)
-
-    d = ch.to_dict()
-    d["distilled_from"] = os.path.basename(seed_txt)
-    with open(target, "w", encoding="utf-8") as fh:
-        json.dump(d, fh, ensure_ascii=False, indent=2)
-        fh.write("\n")
+    _header, names = parse_seed_text(read_text(seed_txt))
+    _write_distilled(build_chapter(names), target, seed_txt)
     return target
+
+
+# --------------------------------------------------------------------------- #
+# Batch distillation — auto-match every dump in data/dumps/ to a chapter
+# --------------------------------------------------------------------------- #
+import re as _re
+
+
+def _tokens(s: str) -> set:
+    """Lowercase alphanumeric tokens, splitting camelCase and separators."""
+    s = _re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", s)
+    return {t for t in _re.split(r"[^A-Za-z0-9]+", s.lower()) if t}
+
+
+def _chapter_index(out_dir: str = LIBRARY_DIR):
+    """[(book_id, stem, path, element_set, name_token_bag)] for every chapter."""
+    index = []
+    for book_id, book_title in list_books(out_dir):
+        btoks = _tokens(book_id) | _tokens(book_title)
+        for stem, title, path in list_chapters(book_id, out_dir):
+            try:
+                d = json.load(open(path, encoding="utf-8"))
+            except Exception:
+                continue
+            elems = set(d.get("vowel_elements", {})) | set(d.get("cons_elements", {}))
+            bag = btoks | _tokens(stem) | _tokens(title)
+            index.append((book_id, stem, path, elems, bag))
+    return index
+
+
+def match_dump(dump_txt: str, index, out_dir: str = LIBRARY_DIR):
+    """Find the best library chapter for a dump. Returns a dict describing the
+    match (coverage, name score, chosen target, runner-up margin, confidence)."""
+    from .preprocess import build_chapter, parse_seed_text
+
+    _header, names = parse_seed_text(read_text(dump_txt))
+    ch = build_chapter(names)
+    delems = set(ch.vowel_elements) | set(ch.cons_elements)
+    label = os.path.splitext(os.path.basename(dump_txt))[0]
+    if label.lower().startswith("ebn-"):
+        label = label[4:]
+    dtoks = _tokens(label)
+
+    # Rank by filename-token match FIRST, content coverage as the tiebreaker.
+    # The book token in the dump name anchors the book, and the gender/variant
+    # token separates siblings; coverage alone is unreliable because .qch
+    # chapters store EBoN's native multi-letter elements that our splitter
+    # carves differently (so a chapter can be <80% "covered" by its own dump).
+    scored = []
+    for (book_id, stem, path, elems, bag) in index:
+        cov = (len(elems & delems) / len(elems)) if elems else 0.0
+        name = (len(dtoks & bag) / len(dtoks)) if dtoks else 0.0
+        scored.append((name, cov, book_id, stem, path))
+    scored.sort(reverse=True)
+    best = scored[0]
+    # Confident when the filename clearly points at this chapter (book + variant
+    # tokens matched) and the content is plausibly the same source.
+    confident = best[0] >= 0.5 and best[1] >= 0.5
+    return {
+        "dump": dump_txt, "chapter": ch,
+        "book_id": best[2], "stem": best[3], "target": best[4],
+        "coverage": best[1], "name": best[0],
+        "confident": confident,
+    }
+
+
+def distill_all(dump_dir: str = DUMPS_DIR, apply: bool = False,
+                out_dir: str = LIBRARY_DIR):
+    """Match every dump in `dump_dir` to a library chapter and distill it.
+
+    Returns [match-dict]. With apply=False (default) nothing is written — it is
+    a dry run you can review. With apply=True, confident matches are written
+    over their target chapter (overwriting any prior distill)."""
+    import glob
+
+    index = _chapter_index(out_dir)
+    results = []
+    for dump in sorted(glob.glob(os.path.join(dump_dir, "*.txt"))):
+        m = match_dump(dump, index, out_dir)
+        if apply and m["confident"]:
+            _write_distilled(m["chapter"], m["target"], dump)
+            m["written"] = True
+        else:
+            m["written"] = False
+        results.append(m)
+    return results
 
 
 # --------------------------------------------------------------------------- #
@@ -425,9 +526,29 @@ def _main(argv=None):
             return
         target = distill_into_library(argv[1], argv[2])
         print(f"distilled {argv[1]} -> {os.path.relpath(target, LIBRARY_DIR)}")
+    elif cmd == "distill-all":
+        apply = "--apply" in argv
+        dump_dir = next((a for a in argv[1:] if not a.startswith("-")), DUMPS_DIR)
+        results = distill_all(dump_dir, apply=apply)
+        ok = sum(1 for m in results if m["confident"])
+        print(f"{'APPLYING' if apply else 'DRY RUN (use --apply to write)'} — "
+              f"{len(results)} dumps, {ok} confident:\n")
+        for m in results:
+            flag = "OK " if m["confident"] else "?? "
+            wrote = "  [written]" if m.get("written") else ""
+            print(f"  {flag}{os.path.basename(m['dump']):42s} -> "
+                  f"{m['book_id']}/{m['stem']:22s} "
+                  f"cov={m['coverage']:.2f} name={m['name']:.2f}{wrote}")
+        low = [m for m in results if not m["confident"]]
+        if low:
+            print(f"\n{len(low)} low-confidence (NOT written even with --apply); "
+                  f"distill these by hand if the guess is right:")
+            for m in low:
+                print(f"     {os.path.basename(m['dump'])} -> "
+                      f"{m['book_id']}/{m['stem']} (cov={m['coverage']:.2f})")
     else:
         print(f"unknown command {cmd!r}; use 'extract', 'books', 'list', "
-              f"'compile', or 'distill'", file=sys.stderr)
+              f"'compile', 'distill', or 'distill-all'", file=sys.stderr)
 
 
 if __name__ == "__main__":
