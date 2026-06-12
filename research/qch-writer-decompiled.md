@@ -84,6 +84,42 @@ into the stream, so a parser reads each count then loops.
 38. **127 × u8** `f[0x34078+i*4]` (validation/letter-freq table B)
 39. **str** `"#END"` (DAT_0049859d)
 
+## FULLY DECODED (2026-06-12) — fit matrices and masks
+
+The remaining unknowns were closed; everything below is validated bit-exact
+against the full known seed lists of debug/Luis/klingon/ROMANFEM and is
+implemented in `pyebon/qch.py`:
+
+- **GENOPT flag bits (step 7) — CORRECTED**: bit0 structgen, bit1 statgen,
+  **bit2 SHUFFLE, bit3 prefix, bit4 suffix** (validated against the five known
+  `.ebn` GENOPT strings; the original guess had 2..4 as prefix/suffix/shuffle).
+- **M1/M2 (steps 19/22) are POSITIONAL frequency tables, not adjacency**:
+  column 0 = the element used name-initially, column nV-1 = name-finally,
+  middle columns = medially. With shuffle ON all medials collapse into
+  column 1; with it OFF they spread: start-anchored `p>>1` before a random
+  pivot, end-anchored `(nV-n+p)>>1` after (generator decompile,
+  `ebonW_00420730.c:1066-1190`).
+- **The transition model is the four validity masks (step 36)**, indexed
+  `[next][prev]`, bit-packed LSB-first:
+  - mask1 `[n44 x 64]`: vowel element may follow a consonant LETTER (L1),
+  - mask2 `[64 x n44]`: consonant letter may follow a vowel element (L1),
+  - mask3 `[64 x 64]`: consonant letter after consonant letter across a
+    vowel (L2),
+  - mask4 `[n44 x n44]`: vowel element after vowel element across a
+    consonant (L3).
+  Consonants fit as single LETTERS (Doc/3): the 64-wide axis is the
+  character's index in EBoN's internal letter table at **EBoN.exe @0x92b84**
+  (the generator indexes it via strchr, `ebonW_00420730.c:2798`):
+
+      0-19  BCDFGHJKLMNPQRSTVWXZ        plain consonants
+      20-39 bcdfghjklmnpqrstvwxz        soft (-H) forms
+      40-50 ç ð ñ þ š Ç Ð Ñ Þ Š ß       accented (raw cp1252 bytes)
+      51-60 0123456789                  SPCCON digit codes
+      61-62 yu                          semivowel y/u as consonant
+
+- Lowercase `y`/`u` in elements are the **semivowel modes**, not soft
+  consonants: they expand to the bare letter (Y/U), never YH/UH.
+
 ## VALIDATED against reader + known seeds (corrections to the above)
 
 Cross-checked with the **reader** (`EBoN.exe:0x41cd90`, `re/qch_reader_decompiled.c`)
@@ -118,11 +154,10 @@ The full validated read order lives in `re/parse_qch.py`.
 
 ## What this unlocks
 
-M1 (`0x3e5c`) and M2 (`0x13e5c`) are the two big [count × nV] frequency
-matrices — the **fit-level adjacency** that was the whole blocker. With BE16
-decoding we can now extract them and assign their semantics (L1 C↔V, L2, L3,
-start/end) empirically against Klingon's known seed adjacency. Prefix/suffix
-keys (steps 26–30) and structures (31–35) are also fully recoverable.
+(Historical note — superseded by the "FULLY DECODED" section above: M1/M2
+turned out to be positional frequencies, and the fit-level adjacency lives in
+the validity masks of step 36.) Prefix/suffix keys (steps 26–30) and
+structures (31–35) are also fully recoverable.
 
 Helper functions for reference: `FUN_00429f74(stream,&out,byte)` = append byte;
 `FUN_0048a5dc(&dst,v,0x100)` = divmod→{dst[0]=v/256, dst[1]=v%256} (BE16);

@@ -3,7 +3,8 @@
     python -m pyebon <chapter> [-n COUNT] [-m MIN] [-x MAX] [-s SEED]
 
 `<chapter>` may be:
-  * a library chapter name (e.g. `core_QUENYA`) — reads data/library/<name>.json,
+  * a library chapter name (e.g. `QUENYA` or `core/QUENYA`) — reads
+    data/library/<book>/<name>.json,
   * a path to one of our `.json` library files,
   * a plaintext `.ebn` seed file (strategy A), or
   * an EBoN compiled `.qch` file (strategy B).

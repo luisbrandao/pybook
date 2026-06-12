@@ -1,5 +1,18 @@
 # PyEBoN — session handoff & the fit-matrix (M1/M2) port
 
+> **RESOLVED 2026-06-12** — the port is done (commits `4987f9e` code,
+> `2d805da` library re-extraction). The investigation overturned this
+> document's premise: M1/M2 are NOT the adjacency — they are positional
+> (initial/medial/final) frequency tables, and the real fit transition model
+> is the four bit-packed VALIDITY MASKS this plan assumed could be skipped.
+> The masks decode bit-exact against every known-seed chapter; the bridge
+> covers 95.9% (mean, mass-weighted; 98–99.9% typical) of the transition
+> mass of EBoN's own output on the 28 distilled twins. Neither Option A nor
+> Option B below was taken as written — the masks gave the exact model
+> directly, no approximation and no 144 KB transliteration needed. Full
+> recovered semantics: `research/qch-writer-decompiled.md` ("FULLY DECODED"
+> section) and the `pyebon/qch.py` module docstring. Kept for history.
+>
 > Written 2026-06-12 as a cold-start briefing for a **clean session** that will
 > tackle the last big piece of work: porting EBoN's exact fit matrices so the
 > imported library books generate at full fidelity. Read `AGENTS.md` first for

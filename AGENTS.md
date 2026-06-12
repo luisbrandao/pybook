@@ -146,19 +146,34 @@ DONE since (this arc):
   nested book hierarchy, seed precompile cache, GUI two-column picker + Build
   tab + Engine/Variety/Blend controls, `.desktop` launcher.
 
-## NEXT TASK — port the fit matrices (M1/M2) → see `research/fidelity-port-plan.md`
+## DONE — the fit-matrix port (the last big gap) is closed
 
-The one substantial open gap. The ~304 `.qch`-bridged library books use a
-**generic all-pairs adjacency** + M1/M2 row-sums, so they have no `adj2`/`ngrams`
-(fit 2/3 collapse to fit 1; Smart falls back to order-1). **M1/M2 are already
-decoded** in `qch.py::decode_qch` (`d.M1`,`d.M2`) — we just discard their column
-structure. The columns are a fit-distance index (`>>1` from position & struct
-length). Two paths: **(A)** derive `adj`/`adj2`/`ngrams` from M1/M2 into the
-existing engine (cheaper, recommended first), or **(B)** full port of the 144 KB
-generator `research/ebonW_00420730.c`. Distilled chapters are the ground truth to
-validate against. **`research/fidelity-port-plan.md` is the full briefing** —
-read it before starting. (Distillation already gives full fidelity for any book
-the user dumps, so this is "complete the whole library without VM dumping".)
+The `.qch` fit engine is **fully decoded and bridged** (commits `4987f9e` +
+`2d805da`; see `research/qch-writer-decompiled.md` "FULLY DECODED" section).
+What the investigation found, overturning the old plan's premise:
+
+- **M1/M2 are positional frequency tables** (col 0 = name-initial, col nV-1 =
+  name-final, middles = medial; shuffle GENOPT collapses medials into col 1).
+- **The real transition model is the four bit-packed validity masks** (which
+  the parser used to skip): `[next][prev]`-indexed L1 (V↔C), L2 (C..C skip)
+  and L3 (V..V skip). Consonants fit as single letters via EBoN's internal
+  63-slot letter table, extracted verbatim from EBoN.exe @0x92b84 (plain /
+  soft / accented consonants, SPCCON digits, semivowel y/u);
+  `pyebon/qch.py::LETTER_TABLE`.
+- **GENOPT flag bits corrected**: bit2 = shuffle (not prefix), bit3/4 =
+  prefix/suffix. Lowercase y/u = semivowel modes, expand to bare Y/U.
+
+`qch_to_chapter` now builds mask-constrained `adj` + `adj2`, START/END edges
+from the positional columns, and the chapter's real fit/prefix/suffix opts;
+`backoff.py` synthesizes an order-2 distribution from `adj`∩`adj2` when a
+chapter stores no ngrams. Validated: masks bit-exact vs the full seed lists of
+debug/Luis/klingon/ROMANFEM; debug.qch reproduces the exact 8 ground-truth
+shapes; 95.9% mean mass-weighted transition coverage vs the 28 distilled
+twins (98–99.9% typical; outliers are distillation artifacts — semivowel-y
+resplitting, hyphenated names). All 304 bridged library books now generate
+with real fit 2/3 and a real order-2 smart engine. Distillation remains
+useful only for recovering true frequencies-of-transition (masks are boolean;
+weights are positional approximations).
 
 ## Conventions
 

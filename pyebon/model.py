@@ -91,14 +91,16 @@ class Chapter:
     # Distance-2 ("skip") adjacency: adj2[a] counts elements seen two positions
     # after a (same category, since categories alternate). This is what EBoN's
     # fit levels 2/3 check: consonant-skip-vowel (C..C) and vowel-skip-consonant
-    # (V..V). Populated by the seed preprocessor; empty for .qch-derived chapters.
+    # (V..V). Populated by the seed preprocessor and, via the L2/L3 validity
+    # masks, by the .qch bridge.
     adj2: Dict[str, Counter] = field(default_factory=dict)
 
     # Variable-order context for the back-off generator (backoff.py): ngrams[L]
     # maps a context tuple of L preceding elements (may include the START
     # sentinel) to a Counter of the elements that followed it (may include END).
     # Only orders 2..MAX_ORDER live here; order 1 is `adj`. Populated by the seed
-    # preprocessor; empty for .qch-derived chapters (back-off degrades to order 1).
+    # preprocessor; empty for .qch-derived chapters (back-off synthesizes order 2
+    # from adj+adj2 there).
     ngrams: Dict[int, Dict[Tuple[str, ...], Counter]] = field(default_factory=dict)
 
     # Structures as tuples of 'C'/'V' (one entry per element), with frequency.
