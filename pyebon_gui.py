@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """pyebon GUI — generate names from the Everchanging Book of Names library.
 
-A clean Tkinter front-end over the new `pyebon` engine, in two tabs:
-  * Generate — a searchable list of every chapter (the 331 extracted library
-            books plus your own data/seeds/*.txt seed lists) on the left, and
-            generation controls (count, length, fit, seed) with the results on
-            the right, with copy / save.
-  * Build a chapter — paste or load a list of seed names, preview the chapter
-            it makes (stats + sample names), and save it into data/seeds/ so
-            it shows up in the Generate tab.
+A clean Tkinter front-end over the `pyebon` engine, in two tabs:
+  * Generate — pick a Book then a Chapter (two columns, mirroring EBoN's own
+            Library/Book/chapter hierarchy), with a metadata panel and the
+            generation controls (count, length, fit, seed) + results.
+  * Build a chapter — paste or load a list of seed names, set the chapter's
+            metadata (title, description, author, date), preview it, and save
+            it into data/seeds/ so it shows up under "My Names".
 
 Run:  python3 pyebon_gui.py
 Stdlib only (Tkinter); no external dependencies.
@@ -22,7 +21,8 @@ import re
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, font as tkfont
 
-from pyebon.library import LIBRARY_DIR, load_chapter
+from pyebon import library as lib
+from pyebon.library import LIBRARY_DIR, load_chapter, compile_seed
 from pyebon.preprocess import build_chapter
 from pyebon.generate import Generator, GenerationError
 from pyebon.splitting import split_elements
@@ -30,35 +30,31 @@ from pyebon.splitting import split_elements
 ROOT = pathlib.Path(__file__).resolve().parent
 CHAPTERS_DIR = ROOT / "data" / "seeds"
 
+ALL_BOOK = "★ All chapters"     # ★
+SEEDS_BOOK = "✎ My Names"       # ✎  (the user's own data/seeds lists)
+
 
 # --------------------------------------------------------------------------- #
-# Chapter discovery — library .json books + the user's data/seeds/*.txt lists.
+# Discovery helpers
 # --------------------------------------------------------------------------- #
-def _pretty(stem: str) -> str:
-    return stem.replace("_", " ")
-
-
-def discover_chapters():
-    """Return a sorted list of (label, kind, path) for every available chapter."""
+def seed_chapter_items():
+    """Seed lists in data/seeds as (label, kind, path)."""
     items = []
-    libdir = pathlib.Path(LIBRARY_DIR)
-    if libdir.is_dir():
-        for p in sorted(libdir.glob("*.json")):
-            items.append((_pretty(p.stem), "lib", str(p)))
     if CHAPTERS_DIR.is_dir():
         for p in sorted(CHAPTERS_DIR.glob("*.txt")):
-            items.append((f"{p.stem}  (txt)", "txt", str(p)))
+            items.append((p.stem, "txt", str(p)))
     return items
 
 
 def load_any(kind: str, path: str):
-    """Load a Chapter from either a library .json or a data/seeds/*.txt seed list."""
+    """Load a Chapter from either a library .json or a data/seeds/*.txt seed list.
+
+    Seed lists go through the precompile cache (compile_seed): the first open
+    builds and caches the Chapter; later opens are instant until the .txt edits.
+    """
     if kind == "lib":
         return load_chapter(path)
-    names = [ln.strip() for ln in open(path, encoding="utf-8") if ln.strip()]
-    ch = build_chapter(names)
-    ch.title = pathlib.Path(path).stem
-    return ch
+    return compile_seed(path)
 
 
 # --------------------------------------------------------------------------- #
@@ -79,12 +75,10 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("pyebon — Everchanging Book of Names")
-        # Open maximized; the geometry below is the fallback (double the old
-        # 920x580 default, clamped to the screen) for WMs that ignore -zoomed.
         w = min(1840, self.winfo_screenwidth())
         h = min(1160, self.winfo_screenheight())
         self.geometry(f"{w}x{h}")
-        self.minsize(720, 460)
+        self.minsize(820, 480)
         try:
             self.attributes("-zoomed", True)   # maximize (X11 / XWayland)
         except tk.TclError:
@@ -97,21 +91,22 @@ class App(tk.Tk):
             pass
         self._style()
 
-        self.all_items = discover_chapters()      # (label, kind, path)
-        self.view_items = list(self.all_items)     # filtered view
         self._chapter_cache = {}                   # path -> Chapter
+        self.books = []                            # [(kind, book_id, title)]
+        self.cur_chapters = []                     # [(label, kind, path)] in selected book
+        self.view_chapters = []                    # filtered by search
+        self._all_cache = None                     # cached "All chapters" list
 
         self._build_layout()
-        self._refresh_list()
-        if self.view_items:
-            self.listbox.selection_set(0)
-            self._on_select()
+        self._refresh_books()
+        self._select_default_book()
 
     # ---- styling -------------------------------------------------------- #
     def _style(self):
         s = ttk.Style()
         base = tkfont.nametofont("TkDefaultFont").actual()["family"]
         self.font_h = (base, 11, "bold")
+        self.font_title = (base, 14, "bold")
         self.font_mono = self._pick_mono()
 
         BG, PANEL, INK, MUTED = self.BG, self.PANEL, self.INK, self.MUTED
@@ -123,13 +118,13 @@ class App(tk.Tk):
         s.configure("TFrame", background=BG)
         s.configure("TLabel", background=BG, foreground=INK)
         s.configure("Hint.TLabel", background=BG, foreground=MUTED)
+        s.configure("Title.TLabel", background=BG, foreground=INK, font=self.font_title)
         s.configure("TPanedwindow", background=BG)
         s.configure("Sash", sashthickness=8, gripcount=0)
 
         s.configure("TEntry", fieldbackground=PANEL, bordercolor=BORDER, padding=4)
         s.configure("TSpinbox", fieldbackground=PANEL, bordercolor=BORDER, arrowsize=12, padding=2)
 
-        # Buttons: flat tan accent with ivory text.
         s.configure("TButton", background=PANEL, foreground=INK, bordercolor=BORDER,
                     relief="flat", padding=6)
         s.map("TButton",
@@ -164,6 +159,22 @@ class App(tk.Tk):
                 return (fam, 13)
         return ("TkFixedFont", 13)
 
+    def _make_listbox(self, parent):
+        box = ttk.Frame(parent)
+        box.rowconfigure(0, weight=1)
+        box.columnconfigure(0, weight=1)
+        lstb = tk.Listbox(
+            box, activestyle="none", exportselection=False,
+            background=self.PANEL, foreground=self.INK,
+            selectbackground=self.SELECT, selectforeground=self.INK,
+            highlightthickness=1, highlightbackground=self.BORDER,
+            highlightcolor=self.BORDER, borderwidth=0, relief="flat")
+        lstb.grid(row=0, column=0, sticky="nsew")
+        sb = ttk.Scrollbar(box, orient="vertical", command=lstb.yview)
+        sb.grid(row=0, column=1, sticky="ns")
+        lstb.config(yscrollcommand=sb.set)
+        return box, lstb
+
     # ---- layout --------------------------------------------------------- #
     def _build_layout(self):
         outer = ttk.Frame(self, padding=10)
@@ -185,63 +196,68 @@ class App(tk.Tk):
         paned = ttk.PanedWindow(gen_tab, orient=tk.HORIZONTAL)
         paned.grid(row=0, column=0, sticky="nsew")
 
-        # ---- left: chapter picker ----
+        # ---- left: Books | Chapters two-column picker ----
         left = ttk.Frame(paned, padding=(0, 0, 10, 0))
         left.rowconfigure(2, weight=1)
-        left.columnconfigure(0, weight=1)
-        paned.add(left, weight=1)
-        # Restore a comfortably wide chapter column once the window is laid out.
-        self.after(0, lambda: self._init_sash(paned, 360))
+        left.columnconfigure(0, weight=1, uniform="pick")
+        left.columnconfigure(1, weight=2, uniform="pick")
+        paned.add(left, weight=2)
+        self.after(0, lambda: self._init_sash(paned, 560))
 
-        ttk.Label(left, text="Chapter", font=self.font_h).grid(row=0, column=0, sticky="w")
+        ttk.Label(left, text="Book", font=self.font_h).grid(row=0, column=0, sticky="w")
+        ttk.Label(left, text="Chapter", font=self.font_h).grid(
+            row=0, column=1, sticky="w", padx=(8, 0))
+
         self.search_var = tk.StringVar()
         search = ttk.Entry(left, textvariable=self.search_var)
-        search.grid(row=1, column=0, sticky="ew", pady=(4, 6))
-        self._placeholder(search, "search…")
+        search.grid(row=1, column=1, sticky="ew", pady=(4, 6), padx=(8, 0))
+        self._placeholder(search, "search chapters…")
 
-        box = ttk.Frame(left)
-        box.grid(row=2, column=0, sticky="nsew")
-        box.rowconfigure(0, weight=1); box.columnconfigure(0, weight=1)
-        self.listbox = tk.Listbox(
-            box, activestyle="none", exportselection=False,
-            background=self.PANEL, foreground=self.INK,
-            selectbackground=self.SELECT, selectforeground=self.INK,
-            highlightthickness=1, highlightbackground=self.BORDER,
-            highlightcolor=self.BORDER, borderwidth=0, relief="flat")
-        self.listbox.grid(row=0, column=0, sticky="nsew")
-        sb = ttk.Scrollbar(box, orient="vertical", command=self.listbox.yview)
-        sb.grid(row=0, column=1, sticky="ns")
-        self.listbox.config(yscrollcommand=sb.set)
-        self.listbox.bind("<<ListboxSelect>>", lambda e: self._on_select())
+        bbox, self.books_box = self._make_listbox(left)
+        bbox.grid(row=2, column=0, sticky="nsew")
+        self.books_box.bind("<<ListboxSelect>>", lambda e: self._on_book_select())
+
+        cbox, self.listbox = self._make_listbox(left)
+        cbox.grid(row=2, column=1, sticky="nsew", padx=(8, 0))
+        self.listbox.bind("<<ListboxSelect>>", lambda e: self._on_chapter_select())
         self.listbox.bind("<Double-Button-1>", lambda e: self.generate())
 
         self.count_label = ttk.Label(left, text="", style="Hint.TLabel")
-        self.count_label.grid(row=3, column=0, sticky="w", pady=(6, 0))
+        self.count_label.grid(row=3, column=1, sticky="w", pady=(6, 0), padx=(8, 0))
 
-        # ---- right: controls + results ----
+        # ---- right: metadata + controls + results ----
         right = ttk.Frame(paned, padding=(10, 0, 0, 0))
-        right.rowconfigure(2, weight=1)
+        right.rowconfigure(3, weight=1)
         right.columnconfigure(0, weight=1)
-        paned.add(right, weight=2)
+        paned.add(right, weight=3)
 
-        # info line (title on the left, a help "?" pinned to the right corner)
-        inforow = ttk.Frame(right)
-        inforow.grid(row=0, column=0, sticky="ew")
-        inforow.columnconfigure(0, weight=1)
+        # metadata panel
+        metaf = ttk.Frame(right)
+        metaf.grid(row=0, column=0, sticky="ew")
+        metaf.columnconfigure(0, weight=1)
         self.info_var = tk.StringVar(value="")
-        ttk.Label(inforow, textvariable=self.info_var, font=self.font_h).grid(
+        ttk.Label(metaf, textvariable=self.info_var, style="Title.TLabel").grid(
             row=0, column=0, sticky="w")
-        ttk.Button(inforow, text="?", width=2, command=self._show_help).grid(
-            row=0, column=1, sticky="e")
+        ttk.Button(metaf, text="?", width=2, command=self._show_help).grid(
+            row=0, column=1, sticky="ne")
+        self.meta_sub_var = tk.StringVar(value="")
+        ttk.Label(metaf, textvariable=self.meta_sub_var, style="Hint.TLabel").grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(1, 0))
+        self.meta_desc_var = tk.StringVar(value="")
+        ttk.Label(metaf, textvariable=self.meta_desc_var, style="Hint.TLabel",
+                  justify="left", wraplength=700).grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(1, 0))
 
-        # controls — row 0: amount/length/seed
+        ttk.Separator(right, orient="horizontal").grid(row=1, column=0, sticky="ew", pady=8)
+
+        # controls
         ctl = ttk.Frame(right)
-        ctl.grid(row=1, column=0, sticky="ew", pady=8)
+        ctl.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         self.count = tk.IntVar(value=35)
         self.min_len = tk.IntVar(value=3)
         self.max_len = tk.IntVar(value=14)
         self.seed = tk.StringVar(value="")
-        self._spin(ctl, "Names", self.count, 1, 500, 0)
+        self._spin(ctl, "Names", self.count, 1, 9999, 0)
         self._spin(ctl, "Min", self.min_len, 1, 40, 2)
         self._spin(ctl, "Max", self.max_len, 2, 60, 4)
         ttk.Label(ctl, text="Seed").grid(row=0, column=6, padx=(12, 4))
@@ -249,7 +265,6 @@ class App(tk.Tk):
         ttk.Label(ctl, text="(blank = random)", style="Hint.TLabel").grid(
             row=0, column=8, padx=(4, 0), sticky="w")
 
-        # controls — row 1: fit level, prefix/suffix, Generate
         self.FIT_LABELS = ["0 — loose", "1 — adjacency", "2 — skip C", "3 — skip C+V"]
         self.fit_var = tk.StringVar(value=self.FIT_LABELS[1])
         self.use_prefix = tk.BooleanVar(value=False)
@@ -268,7 +283,7 @@ class App(tk.Tk):
 
         # results
         res = ttk.Frame(right)
-        res.grid(row=2, column=0, sticky="nsew")
+        res.grid(row=3, column=0, sticky="nsew")
         res.rowconfigure(0, weight=1); res.columnconfigure(0, weight=1)
         self.results = tk.Text(res, font=self.font_mono, wrap="word", state="disabled",
                                background=self.PANEL, foreground=self.INK,
@@ -282,7 +297,7 @@ class App(tk.Tk):
 
         # bottom bar
         bar = ttk.Frame(right)
-        bar.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        bar.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(bar, text="Copy", command=self.copy).pack(side=tk.LEFT)
         ttk.Button(bar, text="Save…", command=self.save).pack(side=tk.LEFT, padx=6)
         self.edit_btn = ttk.Button(bar, text="Edit chapter", command=self.edit_selected)
@@ -290,14 +305,11 @@ class App(tk.Tk):
         self.status = ttk.Label(bar, text="", style="Hint.TLabel")
         self.status.pack(side=tk.RIGHT)
 
-        # wire live search now that the listbox exists
-        self.search_var.trace_add("write", lambda *_: self._refresh_list())
+        self.search_var.trace_add("write", lambda *_: self._refresh_chapters())
 
         # shortcuts
         self.bind("<Control-g>", lambda e: self.generate())
         self.bind("<Return>", self._on_return)
-        # Tk has no select-all by default (Ctrl+A means "line start"); fix that
-        # everywhere: the seed editor, results/preview boxes, entries, spinboxes.
         self.bind_class("Text", "<Control-a>", self._select_all_text)
         for cls in ("TEntry", "TSpinbox"):
             self.bind_class(cls, "<Control-a>", self._select_all_entry)
@@ -314,7 +326,6 @@ class App(tk.Tk):
         return "break"
 
     def _on_return(self, event):
-        # Return inside a Text widget (the seed editor) just inserts a newline.
         if isinstance(event.widget, tk.Text):
             return
         if self.notebook.index(self.notebook.select()) == 1:
@@ -344,32 +355,90 @@ class App(tk.Tk):
         entry.bind("<FocusOut>", on_focus_out)
         self._ph_text = text
 
-    # ---- chapter list --------------------------------------------------- #
+    # ---- books column --------------------------------------------------- #
+    def _refresh_books(self):
+        self.books = [("all", None, ALL_BOOK)]
+        if seed_chapter_items():
+            self.books.append(("seeds", None, SEEDS_BOOK))
+        for book_id, title in lib.list_books():
+            self.books.append(("lib", book_id, title))
+        self.books_box.delete(0, tk.END)
+        for kind, _bid, title in self.books:
+            self.books_box.insert(tk.END, title)
+
+    def _select_default_book(self):
+        # Prefer "My Names" (the user's own); else the first real book; else All.
+        idx = 0
+        for i, (kind, _bid, _title) in enumerate(self.books):
+            if kind == "seeds":
+                idx = i
+                break
+        else:
+            if len(self.books) > 1:
+                idx = 1
+        self.books_box.selection_clear(0, tk.END)
+        self.books_box.selection_set(idx)
+        self.books_box.see(idx)
+        self._on_book_select()
+
+    def _chapters_for_book(self, kind, book_id):
+        if kind == "seeds":
+            return seed_chapter_items()
+        if kind == "lib":
+            return [(title, "lib", path) for _stem, title, path in lib.list_chapters(book_id)]
+        # "all": seeds + every library chapter, labelled with the book title
+        if self._all_cache is None:
+            items = [(f"{lbl}  ·  My Names", k, p) for lbl, k, p in seed_chapter_items()]
+            for bid, btitle in lib.list_books():
+                for _stem, title, path in lib.list_chapters(bid):
+                    items.append((f"{title}  ·  {btitle}", "lib", path))
+            self._all_cache = sorted(items, key=lambda it: it[0].lower())
+        return self._all_cache
+
+    def _selected_book(self):
+        sel = self.books_box.curselection()
+        return self.books[sel[0]] if sel else None
+
+    def _on_book_select(self):
+        b = self._selected_book()
+        if not b:
+            return
+        kind, book_id, _title = b
+        self.cur_chapters = self._chapters_for_book(kind, book_id)
+        self._refresh_chapters()
+
+    # ---- chapters column ------------------------------------------------ #
     def _query(self):
         q = self.search_var.get().strip().lower()
-        return "" if q in ("", "search…") else q
+        return "" if q in ("", "search chapters…") else q
 
-    def _refresh_list(self):
+    def _refresh_chapters(self):
         q = self._query()
-        self.view_items = [it for it in self.all_items if q in it[0].lower()] if q else list(self.all_items)
+        self.view_chapters = ([it for it in self.cur_chapters if q in it[0].lower()]
+                              if q else list(self.cur_chapters))
         self.listbox.delete(0, tk.END)
-        for label, kind, _ in self.view_items:
+        for label, kind, _ in self.view_chapters:
             self.listbox.insert(tk.END, ("📖 " if kind == "lib" else "✎ ") + label)
-        self.count_label.config(text=f"{len(self.view_items)} of {len(self.all_items)} chapters")
-        if self.view_items:
+        self.count_label.config(text=f"{len(self.view_chapters)} chapters")
+        if self.view_chapters:
             self.listbox.selection_clear(0, tk.END)
             self.listbox.selection_set(0)
+            self._on_chapter_select()
+        else:
+            self.info_var.set("")
+            self.meta_sub_var.set("")
+            self.meta_desc_var.set("")
 
     def _selected(self):
         sel = self.listbox.curselection()
-        return self.view_items[sel[0]] if sel else None
+        return self.view_chapters[sel[0]] if sel else None
 
     def _get_chapter(self, kind, path):
         if path not in self._chapter_cache:
             self._chapter_cache[path] = load_any(kind, path)
         return self._chapter_cache[path]
 
-    def _on_select(self):
+    def _on_chapter_select(self):
         it = self._selected()
         if not it:
             return
@@ -379,14 +448,28 @@ class App(tk.Tk):
             ch = self._get_chapter(kind, path)
         except Exception as exc:
             self.info_var.set(label)
+            self.meta_sub_var.set("")
+            self.meta_desc_var.set("")
             self.status.config(text=f"load error: {exc}")
             return
-        title = ch.title or label
-        author = (ch.author or "").strip()
-        meta = f"  ·  {author}" if author and author not in ("0", "-") else ""
-        self.info_var.set(title + meta)
 
-        # Reflect this chapter's native options in the controls.
+        self.info_var.set(ch.title or label)
+
+        # sub-line: author · date
+        bits = []
+        author = (ch.author or "").strip()
+        if author and author not in ("0", "-"):
+            bits.append(author)
+        date = (ch.date or "").strip()
+        if date and date not in ("0", "-"):
+            bits.append(date)
+        self.meta_sub_var.set("  ·  ".join(bits))
+
+        # description lines
+        desc = [d for d in ((ch.line1 or "").strip(), (ch.line2 or "").strip()) if d]
+        self.meta_desc_var.set("\n".join(desc))
+
+        # native options -> controls
         self.fit_var.set(self.FIT_LABELS[max(0, min(3, ch.opts.fit))])
         self.use_prefix.set(bool(ch.opts.prefix) and bool(ch.prefixes))
         self.use_suffix.set(bool(ch.opts.suffix) and bool(ch.suffixes))
@@ -409,7 +492,6 @@ class App(tk.Tk):
             messagebox.showerror("Could not load chapter", str(exc))
             return
 
-        # Apply the fit / prefix / suffix controls to this chapter's options.
         ch.opts.fit = int(self.fit_var.get()[0])
         ch.opts.prefix = self.use_prefix.get()
         ch.opts.suffix = self.use_suffix.get()
@@ -486,7 +568,6 @@ class App(tk.Tk):
         ttk.Button(frame, text="Close", command=win.destroy).pack(anchor="e", pady=(14, 0))
         win.bind("<Escape>", lambda e: win.destroy())
         win.update_idletasks()
-        # center over the main window
         x = self.winfo_rootx() + (self.winfo_width() - win.winfo_width()) // 2
         y = self.winfo_rooty() + 80
         win.geometry(f"+{max(0, x)}+{max(0, y)}")
@@ -507,9 +588,8 @@ class App(tk.Tk):
     def _build_builder(self, tab):
         tab.columnconfigure(0, weight=3)
         tab.columnconfigure(1, weight=2)
-        tab.rowconfigure(2, weight=1)
+        tab.rowconfigure(3, weight=1)
 
-        # left: the seed-name editor
         self.edit_path = None                      # file currently being edited
         hdr = ttk.Frame(tab)
         hdr.grid(row=0, column=0, sticky="ew", padx=(0, 12))
@@ -520,8 +600,11 @@ class App(tk.Tk):
         ttk.Label(tab, text="One name per line. The more you give (30+), the richer the chapter.",
                   style="Hint.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 6))
 
+        # metadata form (its own row, above the editor)
+        self._build_meta_form(tab)
+
         seedbox = ttk.Frame(tab)
-        seedbox.grid(row=2, column=0, sticky="nsew", padx=(0, 12))
+        seedbox.grid(row=3, column=0, sticky="nsew", padx=(0, 12))
         seedbox.rowconfigure(0, weight=1); seedbox.columnconfigure(0, weight=1)
         self.seed_text = tk.Text(seedbox, font=self.font_mono, wrap="none", undo=True,
                                  background=self.PANEL, foreground=self.INK,
@@ -536,7 +619,7 @@ class App(tk.Tk):
         self.seed_text.tag_configure("odd", background="#F2DCC4")   # soft amber
 
         seedbar = ttk.Frame(tab)
-        seedbar.grid(row=3, column=0, sticky="ew", pady=(8, 0), padx=(0, 12))
+        seedbar.grid(row=4, column=0, sticky="ew", pady=(8, 0), padx=(0, 12))
         ttk.Button(seedbar, text="Load .txt…", command=self.load_seed_file).pack(side=tk.LEFT)
         ttk.Button(seedbar, text="Trim", command=self.trim_seeds).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Sort", command=self.sort_seeds).pack(side=tk.LEFT, padx=(6, 0))
@@ -554,7 +637,7 @@ class App(tk.Tk):
                   wraplength=380, justify="left").grid(row=1, column=1, sticky="w", pady=(2, 6))
 
         prevbox = ttk.Frame(tab)
-        prevbox.grid(row=2, column=1, sticky="nsew")
+        prevbox.grid(row=3, column=1, sticky="nsew")
         prevbox.rowconfigure(0, weight=1); prevbox.columnconfigure(0, weight=1)
         self.preview_box = tk.Text(prevbox, font=self.font_mono, wrap="word", state="disabled",
                                    background=self.PANEL, foreground=self.INK,
@@ -567,7 +650,7 @@ class App(tk.Tk):
         self.preview_box.config(yscrollcommand=psb.set)
 
         prevbar = ttk.Frame(tab)
-        prevbar.grid(row=3, column=1, sticky="ew", pady=(8, 0))
+        prevbar.grid(row=4, column=1, sticky="ew", pady=(8, 0))
         ttk.Button(prevbar, text="Preview  ▸", style="Big.TButton",
                    command=self.preview_chapter).pack(side=tk.LEFT)
         ttk.Button(prevbar, text="Save", command=self.save_seed_chapter).pack(
@@ -577,6 +660,47 @@ class App(tk.Tk):
             side=tk.LEFT, padx=(6, 0))
         self.build_status = ttk.Label(prevbar, text="", style="Hint.TLabel")
         self.build_status.pack(side=tk.RIGHT)
+
+    def _build_meta_form(self, tab):
+        """Editable chapter metadata (saved to a <name>.meta.json sidecar)."""
+        self.m_title = tk.StringVar()
+        self.m_line1 = tk.StringVar()
+        self.m_line2 = tk.StringVar()
+        self.m_author = tk.StringVar()
+        self.m_date = tk.StringVar()
+
+        form = ttk.Frame(tab)
+        form.grid(row=2, column=0, sticky="ew", padx=(0, 12), pady=(0, 8))
+        for c in (1, 3):
+            form.columnconfigure(c, weight=1)
+
+        def field(row, col, label, var, span=1):
+            ttk.Label(form, text=label).grid(row=row, column=col, sticky="w",
+                                             padx=(0 if col == 0 else 10, 4), pady=2)
+            ttk.Entry(form, textvariable=var).grid(
+                row=row, column=col + 1, columnspan=span, sticky="ew", pady=2)
+
+        field(0, 0, "Title", self.m_title, span=3)
+        field(1, 0, "About", self.m_line1, span=3)
+        field(2, 0, "More", self.m_line2, span=3)
+        field(3, 0, "Author", self.m_author)
+        field(3, 2, "Date", self.m_date)
+
+    def _load_meta_fields(self, path):
+        meta = lib.load_seed_meta(path) if path else {}
+        self.m_title.set(meta.get("title", "" if not path else pathlib.Path(path).stem))
+        self.m_line1.set(meta.get("line1", ""))
+        self.m_line2.set(meta.get("line2", ""))
+        self.m_author.set(meta.get("author", ""))
+        self.m_date.set(meta.get("date", ""))
+
+    def _collect_meta(self):
+        meta = {"title": self.m_title.get().strip(),
+                "line1": self.m_line1.get().strip(),
+                "line2": self.m_line2.get().strip(),
+                "author": self.m_author.get().strip(),
+                "date": self.m_date.get().strip()}
+        return {k: v for k, v in meta.items() if v}
 
     def _seed_lines(self):
         return [ln.strip() for ln in self.seed_text.get("1.0", "end-1c").splitlines() if ln.strip()]
@@ -594,6 +718,7 @@ class App(tk.Tk):
         self.edit_path = pathlib.Path(path).resolve() if path else None
         self.edit_label.config(
             text=f"editing  {self.edit_path.name}" if self.edit_path else "new chapter")
+        self._load_meta_fields(str(self.edit_path) if self.edit_path else None)
 
     def load_seed_file(self):
         path = filedialog.askopenfilename(initialdir=str(CHAPTERS_DIR),
@@ -747,6 +872,12 @@ class App(tk.Tk):
         p = pathlib.Path(path).resolve()
         self.edit_path = p
         self.edit_label.config(text=f"editing  {p.name}")
+
+        # Save metadata sidecar (if any field filled).
+        meta = self._collect_meta()
+        if meta:
+            lib.save_seed_meta(str(p), meta)
+
         # Drop any cached build of this file so the Generate tab sees the edit.
         self._chapter_cache.pop(path, None)
         self._chapter_cache.pop(str(p), None)
@@ -756,20 +887,26 @@ class App(tk.Tk):
             return
 
         if not is_new:
-            # In-place save while editing: stay on the builder.
             self.build_status.config(text=f"saved {p.name}")
             return
 
-        # A new chapter: refresh the Generate tab and jump to it.
-        self.all_items = discover_chapters()
+        # A new chapter: refresh books, jump to My Names, select it.
+        self._all_cache = None
+        self._refresh_books()
         self.search_var.set("")
-        self._refresh_list()
-        for i, (_label, _kind, ipath) in enumerate(self.view_items):
+        for i, (kind, _bid, _title) in enumerate(self.books):
+            if kind == "seeds":
+                self.books_box.selection_clear(0, tk.END)
+                self.books_box.selection_set(i)
+                self.books_box.see(i)
+                self._on_book_select()
+                break
+        for i, (_label, _kind, ipath) in enumerate(self.view_chapters):
             if pathlib.Path(ipath) == p:
                 self.listbox.selection_clear(0, tk.END)
                 self.listbox.selection_set(i)
                 self.listbox.see(i)
-                self._on_select()
+                self._on_chapter_select()
                 break
         self.build_status.config(text=f"saved {p.name}")
         self.notebook.select(0)

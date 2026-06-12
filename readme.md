@@ -12,7 +12,7 @@ recombining them into new names that feel authentic to each language or culture.
 ## Quick start
 
 ```bash
-# GUI — browse all 331 chapters, generate names, build your own chapters
+# GUI — browse books & chapters, generate names, build your own chapters
 python3 pyebon_gui.py
 
 # CLI — generate 20 names from a library chapter
@@ -25,17 +25,19 @@ python -m pyebon data/seeds/ST-Klingon.txt -n 20
 python -m pyebon core_SINDARIN --info
 
 # List all available library chapters
-python -m pyebon.library list
+python -m pyebon.library books      # list books
+python -m pyebon.library list       # list every chapter, grouped by book
 ```
 
 ## What's in the library
 
-**331 chapters** extracted from the original EBoN program, covering:
+**332 chapters across 34 books** extracted from the original EBoN program, covering:
 Tolkien (Quenya, Sindarin, Khuzdûl…), Greyhawk, Wheel of Time, Forgotten
 Realms, Star Trek species, European gods, Old World cultures, and more — plus
 **21 custom seed lists** in `data/seeds/` (Greek, Roman, Viking, ASoIaF, planets…).
 
-The library is pre-built in `library/` as JSON. The engine does not need the
+The library is pre-built in `data/library/<book>/` as JSON (with a per-book
+`book.json`). The engine does not need the
 original EBoN files at runtime.
 
 ## Generation options
@@ -63,7 +65,8 @@ pyebon/                the engine
   library.py             extract/load/save chapters as JSON
   __main__.py            CLI entry point
 data/
-  library/             331 pre-extracted chapters in JSON format
+  data/library/<book>/  332 pre-extracted chapters across 34 books (JSON)
+  data/seeds/           your own seed lists (+ optional .meta.json sidecars)
   seeds/               custom seed lists (one name per line)
   Doc/                   original EBoN documentation (algorithm spec)
 research/              reverse-engineering artifacts + old superseded code

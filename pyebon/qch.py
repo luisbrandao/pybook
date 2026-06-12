@@ -233,7 +233,9 @@ def qch_to_chapter(path: str, fit: int = 1):
 
     d = decode_qch(path)
     ch = Chapter(
-        title=d.title, line1=d.line2, line2=d.line3, author=d.author,
+        # qch metadata strings: [0]=title [1],[2]=subtitle lines [3]=author/credit.
+        # ([4] is a numeric serial, not a date; EBoN does not store DATE in .qch.)
+        title=d.title, line1=d.line2, line2=d.line3, author=d.line4,
         opts=GenOpts(structgen=True, statgen=True, fit=fit, val=max(1, d.val),
                      prefix=bool(d.pre_keys), suffix=bool(d.suf_keys),
                      shuffle=d.shuffle),

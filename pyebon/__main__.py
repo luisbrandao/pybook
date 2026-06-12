@@ -16,7 +16,7 @@ import sys
 
 from .ebn import load_ebn
 from .generate import Generator, GenerationError
-from .library import LIBRARY_DIR, load_chapter
+from .library import LIBRARY_DIR, load_chapter, find_chapter
 
 
 def main(argv=None):
@@ -30,20 +30,17 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     chapter = args.chapter
-    lib_candidate = os.path.join(LIBRARY_DIR, chapter + ".json")
+    lib_candidate = find_chapter(chapter)
     if chapter.lower().endswith(".json"):
         ch = load_chapter(chapter)
-    elif os.path.isfile(lib_candidate):
-        ch = load_chapter(lib_candidate)             # bare library chapter name
+    elif lib_candidate:
+        ch = load_chapter(lib_candidate)             # library name (book/chapter or bare)
     elif chapter.lower().endswith(".qch"):
         from .qch import qch_to_chapter
         ch, _ = qch_to_chapter(chapter, fit=1)
     elif chapter.lower().endswith(".txt"):
-        from .preprocess import build_chapter
-        with open(chapter, encoding="utf-8") as f:
-            names = [ln.strip() for ln in f if ln.strip()]
-        ch = build_chapter(names)
-        ch.title = os.path.splitext(os.path.basename(chapter))[0]
+        from .library import compile_seed
+        ch = compile_seed(chapter)   # cached build; rebuilds when the .txt changes
     else:
         ch = load_ebn(chapter)
 

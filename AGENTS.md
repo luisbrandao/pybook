@@ -38,9 +38,13 @@ zero.
     soft consonants and SPCCON custom clusters.
   - `library.py` — extract/load/save chapters as JSON; CLI for bulk extraction.
   - `__main__.py` — CLI: `python -m pyebon <chapter|file> -n 20 [--info]`.
-- `data/library/` — **331 pre-extracted chapters** in JSON format (our own
-  format; serialized `Chapter` objects). The engine no longer needs `Ebon/` at
-  runtime.
+- `data/library/<book>/` — **332 pre-extracted chapters across 34 books**, in
+  JSON (serialized `Chapter`). Mirrors EBoN's Library/Book/chapter hierarchy;
+  each book has a `book.json` (decoded from EBoN's `book.dat`: title,
+  description, author/date). The engine no longer needs `Ebon/` at runtime.
+- `data/seeds/` — the user's plaintext seed lists; an optional `<name>.meta.json`
+  sidecar carries title/description/author/date. `.compiled/` (gitignored) caches
+  the built Chapter per list (mtime-invalidated) so opening is instant.
 - `assets/` — the `.desktop` launcher + SVG icon (installed copy lives in
   `~/.local/share/applications/pyebon.desktop`; it uses absolute paths, so
   re-copy it if the repo moves).
@@ -117,10 +121,12 @@ DONE since: **special-letter expansion** and **library extraction**.
 - `qch.expand_special()` reverses soft consonants (lowercase X -> XH) and SPCCON
   custom clusters (digit codes index `list_e04`, e.g. greek 0=SS/1=PH). 329/330
   chapters now generate with no leftover marker codes.
-- `pyebon/library.py` extracts every chapter to `library/<name>.json` (our own
-  format; a serialized `Chapter`). `python -m pyebon.library extract` rebuilt all
-  **331** chapters (~13 MB); `load_chapter()` reads them and the CLI accepts a
-  bare library name (`python -m pyebon core_QUENYA`). The engine **no longer
+- `pyebon/library.py` extracts every chapter to `data/library/<book>/<name>.json`
+  plus a per-book `book.json`. `python -m pyebon.library extract` rebuilt all
+  **332** chapters across **34 books** (~29 MB, pretty-printed); `load_chapter()`
+  reads them and the CLI accepts `book/chapter` or a bare chapter name
+  (`python -m pyebon QUENYA`). `list_books`/`list_chapters`/`find_chapter` drive
+  discovery. The engine **no longer
   needs `Ebon/` at runtime** — the library is committed. The 12 encrypted
   `core/*.EBN` correctly fall back to their `.qch`.
 
@@ -148,6 +154,8 @@ python3 pyebon_gui.py                                   # GUI
 python -m pyebon core_QUENYA -n 20                      # generate by library name
 python -m pyebon data/seeds/ST-Klingon.txt -n 20         # generate from seed list
 python -m pyebon core_SINDARIN --info                   # show chapter metadata
-python -m pyebon.library list                           # list all 331 library chapters
-python -m pyebon.library extract                        # rebuild library/ from Ebon/
+python -m pyebon.library books                          # list books
+python -m pyebon.library list [book]                    # list chapters (optionally in a book)
+python -m pyebon.library extract                        # rebuild data/library/<book>/ from Ebon/
+python -m pyebon.library compile                        # precompile data/seeds/*.txt
 ```

@@ -5,3 +5,8 @@ ebnDebug.txt
 # Original Everchanging Book of Names program + reference data (local only:
 # proprietary binaries + bulk .qch/.ebn). We decode these into our own format.
 Ebon/
+# Precompiled seed-chapter cache (derived from data/seeds/*.txt)
+data/seeds/.compiled/
+data/seeds/ebn*
+# Bulk EBoN name dumps used as distillation sources (kept local; distilled into data/library/)
+data/dumps/
