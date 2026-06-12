@@ -9,6 +9,32 @@ The engine analyses seed names by splitting them into vowelic and consonantal
 elements, learning which elements follow which at multiple "fit" levels, and
 recombining them into new names that feel authentic to each language or culture.
 
+## Requirements
+
+Python 3 and its **tkinter** module (for the GUI). tkinter is part of the
+standard library but most Linux distros ship it as a separate system package
+that isn't installed by default — there are no pip dependencies. If you hit
+`ModuleNotFoundError: No module named 'tkinter'`, install it:
+
+| distro | command |
+| --- | --- |
+| Debian / Ubuntu | `sudo apt install python3-tk` |
+| Fedora / RHEL / Rocky | `sudo dnf install python3-tkinter` |
+| Arch / Manjaro | `sudo pacman -S tk` |
+| openSUSE | `sudo zypper install python3-tk` |
+
+The CLI works without tkinter; only the GUI needs it.
+
+## Install the desktop launcher (optional)
+
+```bash
+./install.sh             # adds a "PyEBoN" entry to your application menu
+./install.sh --uninstall # remove it
+```
+
+It fills in the current checkout path and your `python3` automatically, and
+checks tkinter is present.
+
 ## Quick start
 
 ```bash
