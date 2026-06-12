@@ -11,4 +11,4 @@ data/seeds/ebn*
 # Bulk EBoN name dumps used as distillation sources (kept local; distilled into data/library/)
 data/dumps/
 # Bulk brute-force name dumps (one file per chapter, for local grepping)
-bruteforce/
+bruteforce/*
