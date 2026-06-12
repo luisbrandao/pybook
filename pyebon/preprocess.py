@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Tuple
 
-from .model import Chapter, GenOpts, START, END
+from .model import Chapter, GenOpts, START, END, MAX_ORDER
 from .splitting import split_elements, structure_of
 
 
@@ -86,6 +86,16 @@ def build_chapter(names: List[str], opts: GenOpts | None = None, **meta) -> Chap
         for a, b in zip(keys, keys[2:]):
             ch.add_edge2(a, b)
 
+        # Higher-order context for the back-off generator: for each position,
+        # record (the up-to-MAX_ORDER preceding tokens) -> next token, over the
+        # START-padded, END-terminated sequence. Order 1 is already `adj`.
+        seq = [START] + keys + [END]
+        for i in range(1, len(seq)):
+            for length in range(2, MAX_ORDER + 1):
+                if i - length < 0:
+                    break
+                ch.add_ngram(tuple(seq[i - length:i]), seq[i])
+
         # Structure frequency.
         ch.structures[structure_of(elements)] += 1
 
@@ -93,5 +103,12 @@ def build_chapter(names: List[str], opts: GenOpts | None = None, **meta) -> Chap
         if len(keys) >= 2:
             ch.prefixes[(keys[0], keys[1])] += 1
             ch.suffixes[(keys[-2], keys[-1])] += 1
+
+    # Trim the long tail: a longest-order context seen only once contributes no
+    # statistics the back-off walk can't get by falling back, so drop it to keep
+    # the model compact (matters for the big distilled dumps).
+    top = ch.ngrams.get(MAX_ORDER, {})
+    for ctx in [c for c, nxt in top.items() if sum(nxt.values()) < 2]:
+        del top[ctx]
 
     return ch

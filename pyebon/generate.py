@@ -19,6 +19,37 @@ class GenerationError(RuntimeError):
     pass
 
 
+def valid_name(name: str, val: int) -> bool:
+    """Shared validation (used by both generators).
+
+    !REP (Doc/3): reject a name that is *entirely* a repeated cycle, e.g.
+    RONDROND (ROND x2) or ABABAB (AB x3) -- but NOT BABABI, which EBoN accepts
+    at val:1, so we only reject when the whole string tiles one shorter unit.
+    """
+    if val <= 0:
+        return True
+    n = len(name)
+    for clen in range(1, n // 2 + 1):
+        if n % clen == 0 and name == name[:clen] * (n // clen):
+            return False
+    return True
+
+
+def titlecase(raw: str) -> str:
+    """Only the first letter uppercase (Doc/3, postprocess)."""
+    return raw[:1].upper() + raw[1:].lower()
+
+
+def make_generator(chapter: "Chapter", method: str = "classic",
+                   seed: Optional[int] = None, temperature: float = 1.0):
+    """Return the generator for `method`: 'classic' (the EBoN-style fit walk) or
+    'backoff'/'smart' (the variable-order back-off model in backoff.py)."""
+    if method in ("backoff", "smart"):
+        from .backoff import BackoffGenerator
+        return BackoffGenerator(chapter, seed=seed, temperature=temperature)
+    return Generator(chapter, seed=seed)
+
+
 class Generator:
     def __init__(self, chapter: Chapter, seed: Optional[int] = None):
         self.ch = chapter
@@ -179,18 +210,7 @@ class Generator:
 
     # --- validation ------------------------------------------------------- #
     def _valid(self, name: str) -> bool:
-        opts = self.ch.opts
-        if opts.val <= 0:
-            return True
-        # !REP (Doc/3): reject a name that is *entirely* a repeated cycle, e.g.
-        # RONDROND (ROND x2) or ABABAB (AB x3). Note this must NOT fire on
-        # BABABI -- EBoN accepts that at val:1 -- so we only reject when the
-        # whole string is an exact tiling of one shorter unit.
-        n = len(name)
-        for clen in range(1, n // 2 + 1):
-            if n % clen == 0 and name == name[:clen] * (n // clen):
-                return False
-        return True
+        return valid_name(name, self.ch.opts.val)
 
     # --- public API ------------------------------------------------------- #
     def generate(self, min_len: int = 2, max_len: int = 30, tries: int = 2000) -> str:
@@ -208,5 +228,4 @@ class Generator:
         raise GenerationError("could not generate a name within the given bounds")
 
     def _postprocess(self, raw: str) -> str:
-        """Titlecase: only the first letter uppercase (Doc/3, postprocess)."""
-        return raw[:1].upper() + raw[1:].lower()
+        return titlecase(raw)

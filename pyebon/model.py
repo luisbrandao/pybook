@@ -25,6 +25,11 @@ from typing import Dict, List, Tuple
 START = "\x02"  # marks "beginning of name"
 END = "\x03"    # marks "end of name"
 
+# Highest context length kept for the variable-order back-off model (backoff.py).
+# Order-1 context is the plain adjacency graph (`adj`); `ngrams` stores the
+# higher orders (context length 2..MAX_ORDER), predicting the next element.
+MAX_ORDER = 3
+
 
 @dataclass
 class GenOpts:
@@ -89,6 +94,13 @@ class Chapter:
     # (V..V). Populated by the seed preprocessor; empty for .qch-derived chapters.
     adj2: Dict[str, Counter] = field(default_factory=dict)
 
+    # Variable-order context for the back-off generator (backoff.py): ngrams[L]
+    # maps a context tuple of L preceding elements (may include the START
+    # sentinel) to a Counter of the elements that followed it (may include END).
+    # Only orders 2..MAX_ORDER live here; order 1 is `adj`. Populated by the seed
+    # preprocessor; empty for .qch-derived chapters (back-off degrades to order 1).
+    ngrams: Dict[int, Dict[Tuple[str, ...], Counter]] = field(default_factory=dict)
+
     # Structures as tuples of 'C'/'V' (one entry per element), with frequency.
     structures: Counter = field(default_factory=Counter)
 
@@ -101,6 +113,13 @@ class Chapter:
 
     def add_edge2(self, a: str, b: str) -> None:
         self.adj2.setdefault(a, Counter())[b] += 1
+
+    def add_ngram(self, context: Tuple[str, ...], nxt: str) -> None:
+        self.ngrams.setdefault(len(context), {}).setdefault(context, Counter())[nxt] += 1
+
+    def ngram(self, context: Tuple[str, ...]) -> Counter | None:
+        """The next-element Counter seen after `context`, or None if unseen."""
+        return self.ngrams.get(len(context), {}).get(context)
 
     # --- serialization (our own JSON library format) --------------------- #
     def to_dict(self) -> dict:
@@ -119,6 +138,9 @@ class Chapter:
             # adjacency as {a: {b: count}}
             "adj": {a: dict(succ) for a, succ in self.adj.items()},
             "adj2": {a: dict(succ) for a, succ in self.adj2.items()},
+            # higher-order context: {L: [[context...], {next: count}]} pairs
+            "ngrams": {str(L): [[list(ctx), dict(nxt)] for ctx, nxt in table.items()]
+                       for L, table in self.ngrams.items()},
             # tuple-keyed counters as [[items...], count] pairs
             "structures": [[list(k), v] for k, v in self.structures.items()],
             "prefixes": [[list(k), v] for k, v in self.prefixes.items()],
@@ -143,6 +165,8 @@ class Chapter:
         ch.cons_elements = Counter(d.get("cons_elements", {}))
         ch.adj = {a: Counter(succ) for a, succ in d.get("adj", {}).items()}
         ch.adj2 = {a: Counter(succ) for a, succ in d.get("adj2", {}).items()}
+        ch.ngrams = {int(L): {tuple(ctx): Counter(nxt) for ctx, nxt in entries}
+                     for L, entries in d.get("ngrams", {}).items()}
         ch.structures = Counter({tuple(k): v for k, v in d.get("structures", [])})
         ch.prefixes = Counter({tuple(k): v for k, v in d.get("prefixes", [])})
         ch.suffixes = Counter({tuple(k): v for k, v in d.get("suffixes", [])})

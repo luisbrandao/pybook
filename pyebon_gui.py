@@ -24,7 +24,7 @@ from tkinter import ttk, messagebox, filedialog, font as tkfont
 from pyebon import library as lib
 from pyebon.library import LIBRARY_DIR, load_chapter, compile_seed
 from pyebon.preprocess import build_chapter
-from pyebon.generate import Generator, GenerationError
+from pyebon.generate import Generator, GenerationError, make_generator
 from pyebon.splitting import split_elements
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -269,17 +269,34 @@ class App(tk.Tk):
         self.fit_var = tk.StringVar(value=self.FIT_LABELS[1])
         self.use_prefix = tk.BooleanVar(value=False)
         self.use_suffix = tk.BooleanVar(value=False)
-        ttk.Label(ctl, text="Fit").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        fit_box = ttk.Combobox(ctl, textvariable=self.fit_var, values=self.FIT_LABELS,
-                               state="readonly", width=13)
-        fit_box.grid(row=1, column=1, columnspan=3, sticky="w", pady=(8, 0))
-        ttk.Checkbutton(ctl, text="Prefix", variable=self.use_prefix).grid(
-            row=1, column=4, columnspan=2, sticky="w", padx=(12, 0), pady=(8, 0))
-        ttk.Checkbutton(ctl, text="Suffix", variable=self.use_suffix).grid(
-            row=1, column=6, columnspan=2, sticky="w", pady=(8, 0))
+        self.fit_lbl = ttk.Label(ctl, text="Fit")
+        self.fit_lbl.grid(row=1, column=0, sticky="w", pady=(8, 0))
+        self.fit_box = ttk.Combobox(ctl, textvariable=self.fit_var, values=self.FIT_LABELS,
+                                    state="readonly", width=13)
+        self.fit_box.grid(row=1, column=1, columnspan=3, sticky="w", pady=(8, 0))
+        self.prefix_chk = ttk.Checkbutton(ctl, text="Prefix", variable=self.use_prefix)
+        self.prefix_chk.grid(row=1, column=4, columnspan=2, sticky="w", padx=(12, 0), pady=(8, 0))
+        self.suffix_chk = ttk.Checkbutton(ctl, text="Suffix", variable=self.use_suffix)
+        self.suffix_chk.grid(row=1, column=6, columnspan=2, sticky="w", pady=(8, 0))
         ctl.columnconfigure(8, weight=1)
         ttk.Button(ctl, text="Generate  ▸", style="Big.TButton", command=self.generate).grid(
-            row=1, column=8, sticky="e", pady=(8, 0))
+            row=1, column=8, rowspan=2, sticky="e", pady=(8, 0))
+
+        # Engine selector + variety (temperature) for the back-off engine.
+        self.METHODS = ["Classic (fit levels)", "Smart (back-off)"]
+        self.method_var = tk.StringVar(value=self.METHODS[0])
+        self.VARIETY = ["0.6 — safe", "1.0 — normal", "1.4 — varied", "1.8 — wild"]
+        self.variety_var = tk.StringVar(value=self.VARIETY[1])
+        ttk.Label(ctl, text="Engine").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.method_box = ttk.Combobox(ctl, textvariable=self.method_var, values=self.METHODS,
+                                       state="readonly", width=18)
+        self.method_box.grid(row=2, column=1, columnspan=3, sticky="w", pady=(8, 0))
+        self.method_box.bind("<<ComboboxSelected>>", lambda e: self._sync_method())
+        self.variety_lbl = ttk.Label(ctl, text="Variety")
+        self.variety_lbl.grid(row=2, column=4, sticky="w", padx=(12, 0), pady=(8, 0))
+        self.variety_box = ttk.Combobox(ctl, textvariable=self.variety_var, values=self.VARIETY,
+                                        state="readonly", width=12)
+        self.variety_box.grid(row=2, column=5, columnspan=3, sticky="w", pady=(8, 0))
 
         # results
         res = ttk.Frame(right)
@@ -307,6 +324,7 @@ class App(tk.Tk):
         self.status.pack(side=tk.RIGHT)
 
         self.search_var.trace_add("write", lambda *_: self._refresh_chapters())
+        self._sync_method()
 
         # shortcuts
         self.bind("<Control-g>", lambda e: self.generate())
@@ -343,6 +361,20 @@ class App(tk.Tk):
     def _spin(self, parent, label, var, lo, hi, col):
         ttk.Label(parent, text=label).grid(row=0, column=col, padx=(0 if col == 0 else 12, 4))
         ttk.Spinbox(parent, from_=lo, to=hi, textvariable=var, width=5).grid(row=0, column=col + 1)
+
+    def _is_smart(self):
+        return self.method_var.get().startswith("Smart")
+
+    def _sync_method(self):
+        """Grey out the controls that don't apply to the chosen engine: Fit and
+        Prefix/Suffix are classic-only; Variety is smart-only."""
+        smart = self._is_smart()
+        self.fit_box.config(state="disabled" if smart else "readonly")
+        self.fit_lbl.config(state="disabled" if smart else "normal")
+        self.prefix_chk.config(state="disabled" if smart else "normal")
+        self.suffix_chk.config(state="disabled" if smart else "normal")
+        self.variety_box.config(state="readonly" if smart else "disabled")
+        self.variety_lbl.config(state="normal" if smart else "disabled")
 
     def _placeholder(self, entry, text):
         def on_focus_in(_):
@@ -502,7 +534,11 @@ class App(tk.Tk):
         lo, hi = self.min_len.get(), self.max_len.get()
         if lo > hi:
             lo, hi = hi, lo
-        g = Generator(ch, seed=seed)
+
+        smart = self._is_smart()
+        method = "backoff" if smart else "classic"
+        temp = float(self.variety_var.get().split()[0])
+        g = make_generator(ch, method=method, seed=seed, temperature=temp)
 
         names, misses = [], 0
         for _ in range(self.count.get()):
@@ -511,7 +547,10 @@ class App(tk.Tk):
             except GenerationError:
                 misses += 1
         self._show(names)
-        note = f"{len(names)} names from “{ch.title or label}”"
+        engine = f"Smart (variety {temp:g})" if smart else "Classic"
+        note = f"{len(names)} names from “{ch.title or label}” · {engine}"
+        if smart and not getattr(ch, "ngrams", None):
+            note += " · order-1 (no deep data)"
         if misses:
             note += f"  ({misses} couldn’t fit the length bounds)"
         self.status.config(text=note)
@@ -562,8 +601,22 @@ class App(tk.Tk):
         ttk.Label(frame, text="How names are made", font=(self.font_h[0], 13, "bold")).pack(anchor="w")
         ttk.Label(frame, wraplength=440, justify="left", style="Hint.TLabel",
                   text="Each name is built from chunks (vowel runs and consonant runs) "
-                       "taken from the chapter, arranged into a shape seen in the "
-                       "source names.").pack(anchor="w", pady=(2, 0))
+                       "taken from the chapter.").pack(anchor="w", pady=(2, 0))
+
+        section("Engine — how the chunks are chosen",
+                "Classic (fit levels): the original EBoN method — pick a name shape, "
+                "then fill it chunk by chunk under the Fit / Prefix / Suffix rules below.\n"
+                "Smart (back-off): a statistical model that, at each step, looks at the "
+                "longest run of preceding chunks it has actually seen and continues from "
+                "there (shortening the look-back when it must). Length is decided by the "
+                "data, not a fixed shape, and Fit/Prefix/Suffix don't apply. Your seed "
+                "lists carry the deep data this needs; the imported library books only "
+                "have shallow data, so Smart falls back to a basic chunk-pairing there.")
+
+        section("Variety — only for the Smart engine",
+                "Low (0.6) sticks to the most common, most typical combinations — safe but "
+                "repetitive. Normal (1.0) follows the source frequencies. High (1.4–1.8) "
+                "favours rarer combinations — more surprising, occasionally rougher names.")
 
         section("Fit — how closely a name must echo the source",
                 "0  loose: any chunk can go anywhere. Most variety, least authentic.\n"

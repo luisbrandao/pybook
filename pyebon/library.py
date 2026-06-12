@@ -134,7 +134,12 @@ def compile_seed(txt_path: str, force: bool = False) -> Chapter:
     if os.path.exists(meta_p):
         newest_src = max(newest_src, os.path.getmtime(meta_p))
     if not force and os.path.exists(cache) and os.path.getmtime(cache) >= newest_src:
-        return load_chapter(cache)
+        with open(cache, encoding="utf-8") as fh:
+            d = json.load(fh)
+        # Rebuild caches predating the back-off n-gram data (no "ngrams" key) so
+        # the user's seed lists pick up the smart engine without a manual touch.
+        if "ngrams" in d:
+            return Chapter.from_dict(d)
 
     header, names = parse_seed_text(read_text(txt_path))
     ch = build_chapter(names)

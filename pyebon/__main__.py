@@ -15,7 +15,7 @@ import os
 import sys
 
 from .ebn import load_ebn
-from .generate import Generator, GenerationError
+from .generate import GenerationError, make_generator
 from .library import LIBRARY_DIR, load_chapter, find_chapter
 
 
@@ -26,6 +26,10 @@ def main(argv=None):
     p.add_argument("-m", "--min", dest="min_len", type=int, default=2)
     p.add_argument("-x", "--max", dest="max_len", type=int, default=30)
     p.add_argument("-s", "--seed", type=int, default=None)
+    p.add_argument("--method", choices=["classic", "backoff"], default="classic",
+                   help="generation engine: classic fit-walk (default) or backoff (smart)")
+    p.add_argument("-t", "--temp", type=float, default=1.0,
+                   help="backoff temperature: <1 safe, 1 normal, >1 varied (default 1.0)")
     p.add_argument("--info", action="store_true", help="print chapter info and exit")
     args = p.parse_args(argv)
 
@@ -47,11 +51,12 @@ def main(argv=None):
     if args.info:
         print(f"{ch.title} — {ch.line1} {ch.line2} (by {ch.author})")
         print(f"opts: {ch.opts}")
+        deep = "yes" if getattr(ch, "ngrams", None) else "no (back-off uses order 1)"
         print(f"{len(ch.vowel_elements)} vowel elements, {len(ch.cons_elements)} consonant elements, "
-              f"{len(ch.structures)} structures")
+              f"{len(ch.structures)} structures; deep model: {deep}")
         return 0
 
-    g = Generator(ch, seed=args.seed)
+    g = make_generator(ch, method=args.method, seed=args.seed, temperature=args.temp)
     for _ in range(args.count):
         try:
             print(g.generate(args.min_len, args.max_len))
