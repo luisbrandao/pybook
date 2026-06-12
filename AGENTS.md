@@ -19,7 +19,9 @@ zero.
 
 ## Repository layout
 
-- `pyebon_gui.py` — Tkinter GUI: the main user-facing entry point.
+- `pyebon_gui.py` — Tkinter GUI: the main user-facing entry point. Two tabs:
+  **Generate** (pick a chapter, make names) and **Build a chapter** (paste/load
+  seed names, preview, save to `data/seeds/`).
 - `pyebon/` — the engine (the deliverable). Modules:
   - `model.py` — `Chapter` (our format): element inventories, a frequency-weighted
     **adjacency graph** with `START`/`END` sentinels (the heart of EBoN "fit"),

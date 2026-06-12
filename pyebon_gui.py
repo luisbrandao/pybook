@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """pyebon GUI — generate names from the Everchanging Book of Names library.
 
-A clean two-pane Tkinter front-end over the new `pyebon` engine:
-  * left  — a searchable list of every chapter (the 331 extracted library books
-            plus your own data/seeds/*.txt seed lists),
-  * right — generation controls (count, length, seed) and the results, with
-            copy / save / reroll.
+A clean Tkinter front-end over the new `pyebon` engine, in two tabs:
+  * Generate — a searchable list of every chapter (the 331 extracted library
+            books plus your own data/seeds/*.txt seed lists) on the left, and
+            generation controls (count, length, fit, seed) with the results on
+            the right, with copy / save.
+  * Build a chapter — paste or load a list of seed names, preview the chapter
+            it makes (stats + sample names), and save it into data/seeds/ so
+            it shows up in the Generate tab.
 
 Run:  python3 pyebon_gui.py
 Stdlib only (Tkinter); no external dependencies.
@@ -21,6 +24,7 @@ from tkinter import ttk, messagebox, filedialog, font as tkfont
 from pyebon.library import LIBRARY_DIR, load_chapter
 from pyebon.preprocess import build_chapter
 from pyebon.generate import Generator, GenerationError
+from pyebon.splitting import split_elements
 
 ROOT = pathlib.Path(__file__).resolve().parent
 CHAPTERS_DIR = ROOT / "data" / "seeds"
@@ -138,6 +142,13 @@ class App(tk.Tk):
         s.map("TCombobox", fieldbackground=[("readonly", PANEL)],
               foreground=[("readonly", INK)])
 
+        s.configure("TNotebook", background=BG, bordercolor=BORDER, tabmargins=(0, 4, 0, 0))
+        s.configure("TNotebook.Tab", background=BG, foreground=MUTED,
+                    padding=(14, 6), bordercolor=BORDER)
+        s.map("TNotebook.Tab",
+              background=[("selected", PANEL)],
+              foreground=[("selected", INK)])
+
     def _pick_mono(self):
         for fam in ("DejaVu Sans Mono", "Liberation Mono", "Consolas", "Menlo", "Courier New"):
             if fam in tkfont.families():
@@ -151,7 +162,18 @@ class App(tk.Tk):
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(0, weight=1)
 
-        paned = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
+        self.notebook = ttk.Notebook(outer)
+        self.notebook.grid(row=0, column=0, sticky="nsew")
+
+        gen_tab = ttk.Frame(self.notebook, padding=(0, 8, 0, 0))
+        self.notebook.add(gen_tab, text="Generate")
+        build_tab = ttk.Frame(self.notebook, padding=(0, 8, 0, 0))
+        self.notebook.add(build_tab, text="Build a chapter")
+        self._build_builder(build_tab)
+
+        gen_tab.columnconfigure(0, weight=1)
+        gen_tab.rowconfigure(0, weight=1)
+        paned = ttk.PanedWindow(gen_tab, orient=tk.HORIZONTAL)
         paned.grid(row=0, column=0, sticky="nsew")
 
         # ---- left: chapter picker ----
@@ -262,7 +284,16 @@ class App(tk.Tk):
 
         # shortcuts
         self.bind("<Control-g>", lambda e: self.generate())
-        self.bind("<Return>", lambda e: self.generate())
+        self.bind("<Return>", self._on_return)
+
+    def _on_return(self, event):
+        # Return inside a Text widget (the seed editor) just inserts a newline.
+        if isinstance(event.widget, tk.Text):
+            return
+        if self.notebook.index(self.notebook.select()) == 1:
+            self.preview_chapter()
+        else:
+            self.generate()
 
     def _init_sash(self, paned, x):
         try:
@@ -443,6 +474,161 @@ class App(tk.Tk):
         if path:
             open(path, "w", encoding="utf-8").write(txt + "\n")
             self.status.config(text=f"saved {path}")
+
+    # ---- chapter builder tab --------------------------------------------- #
+    def _build_builder(self, tab):
+        tab.columnconfigure(0, weight=3)
+        tab.columnconfigure(1, weight=2)
+        tab.rowconfigure(2, weight=1)
+
+        # left: the seed-name editor
+        ttk.Label(tab, text="Seed names", font=self.font_h).grid(row=0, column=0, sticky="w")
+        ttk.Label(tab, text="One name per line. The more you give (30+), the richer the chapter.",
+                  style="Hint.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 6))
+
+        seedbox = ttk.Frame(tab)
+        seedbox.grid(row=2, column=0, sticky="nsew", padx=(0, 12))
+        seedbox.rowconfigure(0, weight=1); seedbox.columnconfigure(0, weight=1)
+        self.seed_text = tk.Text(seedbox, font=self.font_mono, wrap="none", undo=True,
+                                 background=self.PANEL, foreground=self.INK,
+                                 insertbackground=self.INK, relief="flat",
+                                 highlightthickness=1, highlightbackground=self.BORDER,
+                                 padx=12, pady=10, spacing1=1, spacing3=1)
+        self.seed_text.grid(row=0, column=0, sticky="nsew")
+        ssb = ttk.Scrollbar(seedbox, orient="vertical", command=self.seed_text.yview)
+        ssb.grid(row=0, column=1, sticky="ns")
+        self.seed_text.config(yscrollcommand=ssb.set)
+        self.seed_text.bind("<<Modified>>", self._on_seed_edit)
+
+        seedbar = ttk.Frame(tab)
+        seedbar.grid(row=3, column=0, sticky="ew", pady=(8, 0), padx=(0, 12))
+        ttk.Button(seedbar, text="Load .txt…", command=self.load_seed_file).pack(side=tk.LEFT)
+        ttk.Button(seedbar, text="Clear", command=lambda: self.seed_text.delete("1.0", tk.END)).pack(
+            side=tk.LEFT, padx=6)
+        self.seed_count = ttk.Label(seedbar, text="0 names", style="Hint.TLabel")
+        self.seed_count.pack(side=tk.RIGHT)
+
+        # right: preview + save
+        ttk.Label(tab, text="Preview", font=self.font_h).grid(row=0, column=1, sticky="w")
+        self.build_stats = tk.StringVar(value="Paste some names, then hit Preview.")
+        ttk.Label(tab, textvariable=self.build_stats, style="Hint.TLabel",
+                  wraplength=380, justify="left").grid(row=1, column=1, sticky="w", pady=(2, 6))
+
+        prevbox = ttk.Frame(tab)
+        prevbox.grid(row=2, column=1, sticky="nsew")
+        prevbox.rowconfigure(0, weight=1); prevbox.columnconfigure(0, weight=1)
+        self.preview_box = tk.Text(prevbox, font=self.font_mono, wrap="word", state="disabled",
+                                   background=self.PANEL, foreground=self.INK,
+                                   relief="flat", highlightthickness=1,
+                                   highlightbackground=self.BORDER,
+                                   padx=12, pady=10, spacing1=2, spacing3=2)
+        self.preview_box.grid(row=0, column=0, sticky="nsew")
+        psb = ttk.Scrollbar(prevbox, orient="vertical", command=self.preview_box.yview)
+        psb.grid(row=0, column=1, sticky="ns")
+        self.preview_box.config(yscrollcommand=psb.set)
+
+        prevbar = ttk.Frame(tab)
+        prevbar.grid(row=3, column=1, sticky="ew", pady=(8, 0))
+        ttk.Button(prevbar, text="Preview  ▸", style="Big.TButton",
+                   command=self.preview_chapter).pack(side=tk.LEFT)
+        ttk.Button(prevbar, text="Save chapter…", command=self.save_seed_chapter).pack(
+            side=tk.LEFT, padx=8)
+        self.build_status = ttk.Label(prevbar, text="", style="Hint.TLabel")
+        self.build_status.pack(side=tk.RIGHT)
+
+    def _seed_lines(self):
+        return [ln.strip() for ln in self.seed_text.get("1.0", "end-1c").splitlines() if ln.strip()]
+
+    def _on_seed_edit(self, _event=None):
+        if self.seed_text.edit_modified():
+            self.seed_count.config(text=f"{len(self._seed_lines())} names")
+            self.seed_text.edit_modified(False)
+
+    def load_seed_file(self):
+        path = filedialog.askopenfilename(initialdir=str(CHAPTERS_DIR),
+                                          filetypes=[("Text", "*.txt"), ("All", "*.*")])
+        if not path:
+            return
+        try:
+            text = open(path, encoding="utf-8").read()
+        except Exception as exc:
+            messagebox.showerror("Could not read file", str(exc))
+            return
+        self.seed_text.delete("1.0", tk.END)
+        self.seed_text.insert("1.0", text)
+        self.build_status.config(text=f"loaded {pathlib.Path(path).name}")
+
+    def _build_from_editor(self):
+        """Build a Chapter from the editor; returns (chapter, used, skipped) or None."""
+        lines = self._seed_lines()
+        usable = [n for n in lines if len(split_elements(n)) >= 2]
+        if len(usable) < 2:
+            messagebox.showinfo(
+                "Not enough names",
+                "Give at least two usable seed names (a name needs both vowels "
+                "and consonants).")
+            return None
+        return build_chapter(usable), len(usable), len(lines) - len(usable)
+
+    def preview_chapter(self):
+        built = self._build_from_editor()
+        if not built:
+            return
+        ch, used, skipped = built
+        self.build_stats.set(
+            f"{used} seeds" + (f" ({skipped} skipped — all-vowel/all-consonant)" if skipped else "")
+            + f"  ·  {len(ch.vowel_elements)} vowel · {len(ch.cons_elements)} cons · "
+              f"{len(ch.structures)} structures · full skip-fit data")
+
+        g = Generator(ch)
+        names, misses = [], 0
+        for _ in range(20):
+            try:
+                names.append(g.generate(3, 14))
+            except GenerationError:
+                misses += 1
+        self.preview_box.config(state="normal")
+        self.preview_box.delete("1.0", tk.END)
+        self.preview_box.insert(tk.END, "\n".join(names))
+        self.preview_box.config(state="disabled")
+        note = f"{len(names)} sample names (fit 3)"
+        if misses:
+            note += f", {misses} misses"
+        self.build_status.config(text=note)
+
+    def save_seed_chapter(self):
+        lines = self._seed_lines()
+        if not lines:
+            messagebox.showinfo("Nothing to save", "The seed list is empty.")
+            return
+        CHAPTERS_DIR.mkdir(parents=True, exist_ok=True)
+        path = filedialog.asksaveasfilename(
+            initialdir=str(CHAPTERS_DIR), defaultextension=".txt",
+            initialfile="my_chapter.txt",
+            filetypes=[("Text", "*.txt"), ("All", "*.*")])
+        if not path:
+            return
+        open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+
+        p = pathlib.Path(path).resolve()
+        if p.parent != CHAPTERS_DIR.resolve():
+            self.build_status.config(text=f"saved {p.name} (outside data/seeds — won't be listed)")
+            return
+
+        # It's a chapter now: refresh the Generate tab and jump to it.
+        self._chapter_cache.pop(str(p), None)
+        self.all_items = discover_chapters()
+        self.search_var.set("")
+        self._refresh_list()
+        for i, (_label, _kind, ipath) in enumerate(self.view_items):
+            if pathlib.Path(ipath) == p:
+                self.listbox.selection_clear(0, tk.END)
+                self.listbox.selection_set(i)
+                self.listbox.see(i)
+                self._on_select()
+                break
+        self.build_status.config(text=f"saved {p.name}")
+        self.notebook.select(0)
 
 
 def main():

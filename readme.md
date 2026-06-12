@@ -12,7 +12,7 @@ recombining them into new names that feel authentic to each language or culture.
 ## Quick start
 
 ```bash
-# GUI — browse all 331 chapters, generate names with one click
+# GUI — browse all 331 chapters, generate names, build your own chapters
 python3 pyebon_gui.py
 
 # CLI — generate 20 names from a library chapter
