@@ -300,6 +300,7 @@ class App(tk.Tk):
         bar.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(bar, text="Copy", command=self.copy).pack(side=tk.LEFT)
         ttk.Button(bar, text="Save…", command=self.save).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bar, text="Dedup", command=self.dedup_results).pack(side=tk.LEFT, padx=(0, 6))
         self.edit_btn = ttk.Button(bar, text="Edit chapter", command=self.edit_selected)
         self.edit_btn.pack(side=tk.LEFT)
         self.status = ttk.Label(bar, text="", style="Hint.TLabel")
@@ -523,6 +524,20 @@ class App(tk.Tk):
 
     def _results_text(self):
         return self.results.get("1.0", "end-1c")
+
+    def dedup_results(self):
+        lines = [ln for ln in self._results_text().splitlines() if ln.strip()]
+        seen, out = set(), []
+        for name in lines:
+            key = name.casefold()
+            if key not in seen:
+                seen.add(key)
+                out.append(name)
+        removed = len(lines) - len(out)
+        self._show(out)
+        self.status.config(
+            text=f"removed {removed} duplicate{'s' if removed != 1 else ''}, {len(out)} left"
+            if removed else "no duplicates")
 
     def copy(self):
         txt = self._results_text()
