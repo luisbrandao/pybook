@@ -62,9 +62,13 @@ zero.
   scripts, format notes, standalone parser) + old superseded code
   (`name_generator_enhanced.py`, `name_generator_gui.py`, `cleaner.py`,
   `qch_explore.py`). See `research/README.md` for details.
-- `Ebon/` — **gitignored.** The original program (proprietary `.exe`s) + 330
-  `.qch` + a few `.ebn` + book data. Local reference only; no longer needed at
-  runtime.
+- `Ebon/` — **removed from this machine (2026-06-12).** The original program
+  (proprietary `.exe`s) + 330 `.qch` + a few `.ebn` + book data. It was only
+  ever a gitignored local reference; the user keeps archived backups elsewhere
+  (it is lost media — possibly one of the last working registered copies).
+  Everything it provided now lives converted in `data/library/`. Restoring a
+  copy to `Ebon/` is only needed to re-run `python -m pyebon.library extract`
+  or to revisit the binary (e.g. `EBoN.exe @0x92b84`, the letter table).
 
 ## The EBoN algorithm (summary; full spec in Doc/3-WritingChapters.txt)
 
