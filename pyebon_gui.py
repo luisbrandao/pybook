@@ -654,6 +654,7 @@ class App(tk.Tk):
                 or any(c.isupper() for c in name[1:]))
 
     def find_problems(self):
+        self.seed_text.tag_remove("odd", "1.0", tk.END)   # re-check from scratch
         lines = self._seed_lines()
         odd = [n for n in lines if self._looks_odd(n)]
         if not odd:
