@@ -759,13 +759,17 @@ class App(tk.Tk):
 
     def trim_seeds(self):
         """Clean pasted text down to one bare name per line: drop <tags>, split
-        on separators (, ; / \\ | tab), keep only letters/space/hyphen/apostrophe,
-        collapse whitespace and blank lines."""
+        on separators (, ; / \\ | tab), cut 'Name – meaning' descriptions
+        (en/em dash, colon, or spaced hyphen), keep only
+        letters/space/hyphen/apostrophe, collapse whitespace and blank lines."""
         raw = self.seed_text.get("1.0", "end-1c")
         before = len(self._seed_lines())
         raw = re.sub(r"<[^>]*>", " ", raw)
         out = []
         for chunk in re.split(r"[\n,;/\\|\t]+", raw):
+            # 'Yuu – Gentil' / 'Yuu: gentle' / 'Yuu - Gentil' -> keep the name;
+            # a spaced hyphen separates, an unspaced one (O'Mara-Jin) belongs.
+            chunk = re.split(r"\s*[–—:]\s*|\s+-\s+", chunk, maxsplit=1)[0]
             name = "".join(c if (c.isalpha() or c in " '-") else " " for c in chunk)
             name = re.sub(r"\s+", " ", name).strip(" '-")
             if name:
