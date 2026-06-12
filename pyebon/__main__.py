@@ -22,7 +22,7 @@ from .library import LIBRARY_DIR, load_chapter
 def main(argv=None):
     p = argparse.ArgumentParser(prog="pyebon", description="Everchanging Book of Names (reimplementation).")
     p.add_argument("chapter", help="library chapter name, or path to a .json/.ebn/.qch file")
-    p.add_argument("-n", "--count", type=int, default=20, help="how many names (default 20)")
+    p.add_argument("-n", "--count", type=int, default=35, help="how many names (default 35)")
     p.add_argument("-m", "--min", dest="min_len", type=int, default=2)
     p.add_argument("-x", "--max", dest="max_len", type=int, default=30)
     p.add_argument("-s", "--seed", type=int, default=None)

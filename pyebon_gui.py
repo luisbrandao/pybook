@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, font as tkfont
 
@@ -236,7 +237,7 @@ class App(tk.Tk):
         # controls — row 0: amount/length/seed
         ctl = ttk.Frame(right)
         ctl.grid(row=1, column=0, sticky="ew", pady=8)
-        self.count = tk.IntVar(value=20)
+        self.count = tk.IntVar(value=35)
         self.min_len = tk.IntVar(value=3)
         self.max_len = tk.IntVar(value=14)
         self.seed = tk.StringVar(value="")
@@ -295,6 +296,22 @@ class App(tk.Tk):
         # shortcuts
         self.bind("<Control-g>", lambda e: self.generate())
         self.bind("<Return>", self._on_return)
+        # Tk has no select-all by default (Ctrl+A means "line start"); fix that
+        # everywhere: the seed editor, results/preview boxes, entries, spinboxes.
+        self.bind_class("Text", "<Control-a>", self._select_all_text)
+        for cls in ("TEntry", "TSpinbox"):
+            self.bind_class(cls, "<Control-a>", self._select_all_entry)
+
+    @staticmethod
+    def _select_all_text(event):
+        event.widget.tag_add("sel", "1.0", "end-1c")
+        event.widget.mark_set("insert", "1.0")
+        return "break"
+
+    @staticmethod
+    def _select_all_entry(event):
+        event.widget.select_range(0, tk.END)
+        return "break"
 
     def _on_return(self, event):
         # Return inside a Text widget (the seed editor) just inserts a newline.
@@ -516,12 +533,15 @@ class App(tk.Tk):
         ssb.grid(row=0, column=1, sticky="ns")
         self.seed_text.config(yscrollcommand=ssb.set)
         self.seed_text.bind("<<Modified>>", self._on_seed_edit)
+        self.seed_text.tag_configure("odd", background="#F2DCC4")   # soft amber
 
         seedbar = ttk.Frame(tab)
         seedbar.grid(row=3, column=0, sticky="ew", pady=(8, 0), padx=(0, 12))
         ttk.Button(seedbar, text="Load .txt…", command=self.load_seed_file).pack(side=tk.LEFT)
+        ttk.Button(seedbar, text="Trim", command=self.trim_seeds).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Sort", command=self.sort_seeds).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Dedup", command=self.dedup_seeds).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(seedbar, text="Odd first", command=self.find_problems).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(seedbar, text="Clear", command=lambda: self._set_editor("")).pack(
             side=tk.LEFT, padx=(6, 0))
         self.seed_count = ttk.Label(seedbar, text="0 names", style="Hint.TLabel")
@@ -610,6 +630,43 @@ class App(tk.Tk):
         self.build_status.config(text=f"loaded {pathlib.Path(path).name}")
         self.notebook.select(1)
 
+    def trim_seeds(self):
+        """Clean pasted text down to one bare name per line: drop <tags>, split
+        on separators (, ; / \\ | tab), keep only letters/space/hyphen/apostrophe,
+        collapse whitespace and blank lines."""
+        raw = self.seed_text.get("1.0", "end-1c")
+        before = len(self._seed_lines())
+        raw = re.sub(r"<[^>]*>", " ", raw)
+        out = []
+        for chunk in re.split(r"[\n,;/\\|\t]+", raw):
+            name = "".join(c if (c.isalpha() or c in " '-") else " " for c in chunk)
+            name = re.sub(r"\s+", " ", name).strip(" '-")
+            if name:
+                out.append(name.title())   # fix case: KHAL DROGO -> Khal Drogo
+        self._set_editor("\n".join(out), self.edit_path)
+        self.build_status.config(text=f"trimmed: {before} lines → {len(out)} names")
+
+    @staticmethod
+    def _looks_odd(name):
+        """A name that probably needs a human look: spaces or any non-letter
+        character in it, or stray uppercase past the first letter (KHAL)."""
+        return (any(not c.isalpha() for c in name)
+                or any(c.isupper() for c in name[1:]))
+
+    def find_problems(self):
+        lines = self._seed_lines()
+        odd = [n for n in lines if self._looks_odd(n)]
+        if not odd:
+            self.build_status.config(text="no odd names found")
+            return
+        clean = [n for n in lines if not self._looks_odd(n)]
+        self._set_editor("\n".join(odd + clean), self.edit_path)
+        self.seed_text.tag_add("odd", "1.0", f"{len(odd)}.end")
+        self.seed_text.mark_set("insert", "1.0")
+        self.seed_text.see("1.0")
+        self.build_status.config(
+            text=f"{len(odd)} odd name{'s' if len(odd) != 1 else ''} moved to the top")
+
     def sort_seeds(self):
         lines = self._seed_lines()
         self._set_editor("\n".join(sorted(lines, key=str.casefold)), self.edit_path)
@@ -653,7 +710,7 @@ class App(tk.Tk):
 
         g = Generator(ch)
         names, misses = [], 0
-        for _ in range(20):
+        for _ in range(35):
             try:
                 names.append(g.generate(3, 14))
             except GenerationError:
