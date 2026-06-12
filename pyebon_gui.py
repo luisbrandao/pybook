@@ -254,7 +254,7 @@ class App(tk.Tk):
         ctl = ttk.Frame(right)
         ctl.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         self.count = tk.IntVar(value=35)
-        self.min_len = tk.IntVar(value=3)
+        self.min_len = tk.IntVar(value=1)
         self.max_len = tk.IntVar(value=14)
         self.seed = tk.StringVar(value="")
         self._spin(ctl, "Names", self.count, 1, 9999, 0)
