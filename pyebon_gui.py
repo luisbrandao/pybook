@@ -729,6 +729,13 @@ class App(tk.Tk):
             self.seed_count.config(text=f"{len(self._seed_lines())} names")
             self.seed_text.edit_modified(False)
 
+    def _set_text(self, text):
+        """Replace the editor's content only — edit target and the metadata
+        fields (which may hold unsaved typing) stay untouched."""
+        self.seed_text.delete("1.0", tk.END)
+        if text:
+            self.seed_text.insert("1.0", text)
+
     def _set_editor(self, text, path=None):
         """Fill the seed editor and remember which file (if any) it edits."""
         self.seed_text.delete("1.0", tk.END)
@@ -799,7 +806,7 @@ class App(tk.Tk):
             name = re.sub(r"\s+", " ", name).strip(" '-")
             if name:
                 out.append(name.title())   # fix case: KHAL DROGO -> Khal Drogo
-        self._set_editor("\n".join(out), self.edit_path)
+        self._set_text("\n".join(out))
         self.build_status.config(text=f"trimmed: {before} lines → {len(out)} names")
 
     @staticmethod
@@ -817,7 +824,7 @@ class App(tk.Tk):
             self.build_status.config(text="no odd names found")
             return
         clean = [n for n in lines if not self._looks_odd(n)]
-        self._set_editor("\n".join(odd + clean), self.edit_path)
+        self._set_text("\n".join(odd + clean))
         self.seed_text.tag_add("odd", "1.0", f"{len(odd)}.end")
         self.seed_text.mark_set("insert", "1.0")
         self.seed_text.see("1.0")
@@ -826,7 +833,7 @@ class App(tk.Tk):
 
     def sort_seeds(self):
         lines = self._seed_lines()
-        self._set_editor("\n".join(sorted(lines, key=str.casefold)), self.edit_path)
+        self._set_text("\n".join(sorted(lines, key=str.casefold)))
         self.build_status.config(text=f"sorted {len(lines)} names")
 
     def dedup_seeds(self):
@@ -838,7 +845,7 @@ class App(tk.Tk):
                 seen.add(key)
                 out.append(name)
         removed = len(lines) - len(out)
-        self._set_editor("\n".join(out), self.edit_path)
+        self._set_text("\n".join(out))
         self.build_status.config(
             text=f"removed {removed} duplicate{'s' if removed != 1 else ''}"
             if removed else "no duplicates")
