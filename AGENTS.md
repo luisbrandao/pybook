@@ -29,9 +29,15 @@ zero.
   - `splitting.py` — split a name into alternating vowelic/consonantal elements
     (Doc/3 step 2).
   - `preprocess.py` — **strategy A**: build a `Chapter` from seed names.
-  - `generate.py` — frequency-weighted random walk over the adjacency graph with
-    backtracking; structure selection; validation (`!REP` etc.); real fit:2/3
-    (skip-adjacency) and prefix/suffix forcing.
+  - `generate.py` — **classic engine**: frequency-weighted random walk over the
+    adjacency graph with backtracking; structure selection; validation (`!REP`
+    etc.); real fit:2/3 (skip-adjacency) and prefix/suffix forcing. Also holds
+    `make_generator(method=...)` (the engine factory) and shared helpers.
+  - `backoff.py` — **smart engine**: variable-order back-off Markov model over
+    the element sequence, with a temperature knob; length decided by an END
+    token. Falls back to order-1 (`adj`) when a chapter lacks `ngrams`.
+  - `blend.py` — `blend_chapters([(chapter, weight), …])`: mass-normalized,
+    weighted merge of two+ chapters into one (mix cultures). EBoN never did this.
   - `ebn.py` — parse plaintext `.ebn` chapter files.
   - `qch.py` — **strategy B**: decode EBoN's compiled `.qch` binary;
     `qch_to_chapter` bridges it into the engine; `expand_special()` handles
@@ -92,7 +98,7 @@ Luis, Planetas) vs **326 locked** (`.qch`-only: all official Tolkien / Greyhawk 
 Wheel of Time / Forgotten Realms / Star Trek / euro-gods / old-world libraries,
 incl. the 12 encrypted `core/*.EBN`). Cracking the matrices unlocks 326 chapters.
 
-## Current task (#5 DONE — format cracked via decompilation)
+## RE history — `.qch` format cracked via decompilation (DONE)
 
 The `.qch` format is **fully decoded and validated** (lands exactly on `#END`
 for debug/Luis/klingon). We decompiled EBoN.exe with Ghidra headless — writer
@@ -130,13 +136,29 @@ DONE since: **special-letter expansion** and **library extraction**.
   needs `Ebon/` at runtime** — the library is committed. The 12 encrypted
   `core/*.EBN` correctly fall back to their `.qch`.
 
-One known fidelity gap remains (optional; the "inspiration" goal is met):
-- **EBoN's exact fit matrices (M1/M2)** aren't replicated — the middle of a name
-  uses generic frequency-weighted vowel↔consonant adjacency, so e.g. debug no
-  longer keeps its B/C vowel sets disjoint via the `.qch` path (strategy A from
-  seeds still does, exactly). M1/M2 columns are a fit-distance index the
-  generator derives from (position, struct length) via `>>1`; porting it means
-  transliterating the 144KB generator (`research/ebonW_00420730.c`).
+DONE since (this arc):
+- **Distillation**: dump 10k+ names from EBoN (all options on) → rebuild through
+  the seed preprocessor to recover full adjacency + skip data. `distill` /
+  `distill-all` commands; **28 library chapters now distilled** (full fidelity).
+- **Smart engine** (`backoff.py`): variable-order back-off + temperature.
+- **Chapter blending** (`blend.py`): weighted mix of two chapters.
+- Metadata fix (real author/credit lines; `.qch` has no per-chapter DATE),
+  nested book hierarchy, seed precompile cache, GUI two-column picker + Build
+  tab + Engine/Variety/Blend controls, `.desktop` launcher.
+
+## NEXT TASK — port the fit matrices (M1/M2) → see `research/fidelity-port-plan.md`
+
+The one substantial open gap. The ~304 `.qch`-bridged library books use a
+**generic all-pairs adjacency** + M1/M2 row-sums, so they have no `adj2`/`ngrams`
+(fit 2/3 collapse to fit 1; Smart falls back to order-1). **M1/M2 are already
+decoded** in `qch.py::decode_qch` (`d.M1`,`d.M2`) — we just discard their column
+structure. The columns are a fit-distance index (`>>1` from position & struct
+length). Two paths: **(A)** derive `adj`/`adj2`/`ngrams` from M1/M2 into the
+existing engine (cheaper, recommended first), or **(B)** full port of the 144 KB
+generator `research/ebonW_00420730.c`. Distilled chapters are the ground truth to
+validate against. **`research/fidelity-port-plan.md` is the full briefing** —
+read it before starting. (Distillation already gives full fidelity for any book
+the user dumps, so this is "complete the whole library without VM dumping".)
 
 ## Conventions
 
