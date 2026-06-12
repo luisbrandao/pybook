@@ -41,7 +41,7 @@ def main(argv=None):
         ch = load_chapter(lib_candidate)             # library name (book/chapter or bare)
     elif chapter.lower().endswith(".qch"):
         from .qch import qch_to_chapter
-        ch, _ = qch_to_chapter(chapter, fit=1)
+        ch, _ = qch_to_chapter(chapter)
     elif chapter.lower().endswith(".txt"):
         from .library import compile_seed
         ch = compile_seed(chapter)   # cached build; rebuilds when the .txt changes
@@ -51,7 +51,12 @@ def main(argv=None):
     if args.info:
         print(f"{ch.title} — {ch.line1} {ch.line2} (by {ch.author})")
         print(f"opts: {ch.opts}")
-        deep = "yes" if getattr(ch, "ngrams", None) else "no (back-off uses order 1)"
+        if getattr(ch, "ngrams", None):
+            deep = "yes (stored n-grams)"
+        elif getattr(ch, "adj2", None):
+            deep = "yes (skip adjacency; back-off synthesizes order 2)"
+        else:
+            deep = "no (back-off uses order 1)"
         print(f"{len(ch.vowel_elements)} vowel elements, {len(ch.cons_elements)} consonant elements, "
               f"{len(ch.structures)} structures; deep model: {deep}")
         return 0

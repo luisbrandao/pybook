@@ -13,8 +13,28 @@ Numeric encodings recovered from the binary:
 
 Extracted fields: metadata, GENOPT, the consonant alphabet, the consonant
 ELEMENT list and the vowel ELEMENT list (both multi-letter clusters), the M1/M2
-fit-frequency matrices, prefix/suffix two-element keys with frequencies, and the
-structure / substructure tables.
+fit-frequency matrices, prefix/suffix two-element keys with frequencies, the
+structure / substructure tables, and the four FIT VALIDITY MASKS.
+
+Semantics recovered empirically (bit-exact against the known seeds of
+debug/Luis/klingon/ROMANFEM):
+
+  * M1 [vowel x nV] and M2 [cons x nV] are POSITIONAL frequency tables, not
+    adjacency: column 0 counts the element name-initially, column nV-1 counts
+    it name-finally, and the middle columns count medial use (with the prefix
+    GENOPT on, all medials collapse into column 1; with it off they spread
+    over columns 1..(nV-1)>>1 start-anchored and (nV-n+p)>>1 end-anchored —
+    see the generator decompile, research/ebonW_00420730.c:1066).
+  * The transition data is the four bit-packed validity masks, indexed
+    [next][prev]. Consonants fit as single LETTERS (Doc/3): the letter axis is
+    the character's position in LETTER_TABLE, EBoN's fixed 63-slot internal
+    consonant table (extracted verbatim from EBoN.exe @0x92b84; the generator
+    indexes the masks via strchr on it — ebonW_00420730.c:2798).
+    mask_cv: vowel element following a consonant last-letter (fit L1);
+    mask_vc: consonant first-letter following a vowel element (L1);
+    mask_cc: consonant first-letter following a consonant last-letter across a
+    vowel (L2); mask_vv: vowel element following a vowel element across a
+    consonant (L3).
 """
 
 from __future__ import annotations
@@ -22,6 +42,18 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
+
+# EBoN's internal consonant-letter table (EBoN.exe @0x92b84). The fit masks'
+# 64-wide letter axis is a character's index in this string: 0-19 plain
+# consonants, 20-39 their soft (-H) forms, 40-50 accented (ç ð ñ þ š Ç Ð Ñ Þ
+# Š ß as raw cp1252/latin-1 bytes, matching our latin-1 string decode),
+# 51-60 the SPCCON digit codes, 61-62 semivowel y/u.
+LETTER_TABLE = ("BCDFGHJKLMNPQRSTVWXZ"
+                "bcdfghjklmnpqrstvwxz"
+                "\xe7\xf0\xf1\xfe\x9a\xc7\xd0\xd1\xde\x8a\xdf"
+                "0123456789"
+                "yu")
+LETTER_INDEX = {c: i for i, c in enumerate(LETTER_TABLE)}
 
 
 # ----------------------------------------------------------------------------- #
@@ -95,6 +127,14 @@ class QchChapter:
     sub_freq: List[List[int]] = field(default_factory=list)
     sub_labels: List[List[str]] = field(default_factory=list)
 
+    # Fit validity masks as sets of allowed (next, prev) index pairs.
+    # Vowels are indexed by vowel_elements position; consonants by single
+    # LETTER = position in LETTER_TABLE. See the module docstring.
+    mask_cv: set = field(default_factory=set)   # (vowel idx, prev letter idx)   L1
+    mask_vc: set = field(default_factory=set)   # (letter idx, prev vowel idx)   L1
+    mask_cc: set = field(default_factory=set)   # (letter idx, prev letter idx)  L2
+    mask_vv: set = field(default_factory=set)   # (vowel idx, prev vowel idx)    L3
+
     # Resolve a prefix/suffix entry to its two elements in sequence order.
     # `a` is the first element, `b` the second; the tag gives the C/V pattern:
     #   tag 'C' (0x43) -> consonant then vowel;  tag 'V' (0x56) -> vowel then consonant.
@@ -124,6 +164,8 @@ def expand_special(elem: str, clusters: List[str]) -> str:
         expand to clusters[digit].
     Clusters may themselves contain soft (lowercase) letters, so we expand
     digits first, then soft consonants, in a single left-to-right pass.
+    Lowercase y/u are NOT soft: they mark the semivowel treated as a consonant
+    (the y:/u: GENOPT modes) and expand to the bare letter.
     """
     if not elem:
         return elem
@@ -131,9 +173,11 @@ def expand_special(elem: str, clusters: List[str]) -> str:
     if any(c.isdigit() for c in elem):
         elem = "".join(clusters[int(c)] if (c.isdigit() and int(c) < len(clusters)) else c
                         for c in elem)
-    # Pass 2: soft consonants (lowercase letters) -> uppercase + H.
+    # Pass 2: semivowel consonants y/u -> bare letter; other lowercase (soft
+    # consonants) -> uppercase + H.
     if any(c.islower() for c in elem):
-        elem = "".join(c.upper() + "H" if c.islower() else c for c in elem)
+        elem = "".join(c.upper() if c in "yu" else (c.upper() + "H" if c.islower() else c)
+                       for c in elem)
     return elem
 
 
@@ -172,11 +216,14 @@ def decode_qch(path: str) -> QchChapter:
     ch.fit = r.u8()
     ch.val = r.u8()
     r.u8(); r.u8(); r.u8()  # opt3, opt4, opt5 (y/u/punct modes — not needed here)
+    # Flag bits validated against the five known .ebn GENOPT strings:
+    # bit2 is SHUFFLE (not prefix as the writer notes first guessed) — which is
+    # also why shuffled chapters collapse all medial M1/M2 use into column 1.
     ch.structgen = bool(ch.flags & 1)
     ch.statgen = bool(ch.flags & 2)
-    ch.prefix_opt = bool(ch.flags & 4)
-    ch.suffix_opt = bool(ch.flags & 8)
-    ch.shuffle = bool(ch.flags & 16)
+    ch.shuffle = bool(ch.flags & 4)
+    ch.prefix_opt = bool(ch.flags & 8)
+    ch.suffix_opt = bool(ch.flags & 16)
 
     ch.consonants = r.cstr()
     r.u16()                       # f[0x3c]: prefix/suffix capacity hint (unused)
@@ -210,47 +257,76 @@ def decode_qch(path: str) -> QchChapter:
     ch.sub_freq = [[r.u16() for _ in range(ch.sub_counts[i])] for i in range(nStruct)]
     ch.sub_labels = [[r.cstr() for _ in range(ch.sub_counts[i])] for i in range(nStruct)]
 
-    # (validity bitmasks + 2x127 validation tables + '#END' follow; not needed
-    #  for generation, so we stop parsing here.)
+    # Fit validity masks, bit-packed LSB-first, one row per "next" index.
+    # Row/column geometry from the writer (research/qch-writer-decompiled.md
+    # step 36); semantics validated bit-exact against known-seed chapters.
+    def mask(nrows: int, nflags: int) -> set:
+        per = (nflags + 7) // 8
+        pairs = set()
+        for i in range(nrows):
+            for k, byte in enumerate(r.raw(per)):
+                while byte:
+                    b = byte & -byte
+                    j = k * 8 + b.bit_length() - 1
+                    if j < nflags:
+                        pairs.add((i, j))
+                    byte ^= b
+        return pairs
+
+    n44 = len(ch.vowel_elements)
+    ch.mask_cv = mask(n44, 64)    # vowel may follow consonant last-letter
+    ch.mask_vc = mask(64, n44)    # consonant first-letter may follow vowel
+    ch.mask_cc = mask(64, 64)     # cons first-letter after cons last-letter (skip V)
+    ch.mask_vv = mask(n44, n44)   # vowel after vowel (skip C)
+
+    # (per-suffix-entry masks + 2x127 validation tables + '#END' follow; not
+    #  needed for generation, so we stop parsing here.)
     return ch
 
 
 # ----------------------------------------------------------------------------- #
 # Bridge into our engine's Chapter model.
 # ----------------------------------------------------------------------------- #
-def qch_to_chapter(path: str, fit: int = 1):
-    """Build a Chapter from a decoded .qch.
+def qch_to_chapter(path: str, fit: int | None = None):
+    """Build a Chapter from a decoded .qch — at full fit fidelity.
 
-    Uses the real element inventories (vowel + consonant clusters), the
-    prefix/suffix two-element keys (genuine seed adjacency for openings and
-    closings), the structure distribution, and the M1/M2 fit matrices as element
-    frequencies. Prefix/suffix pairs seed the adjacency graph with START/END
-    sentinels; the middle is filled from frequency-weighted pools. This is much
-    closer to EBoN than the old fit:0 path (which had no consonant clusters and
-    no prefix/suffix), though it does not reproduce EBoN's full fit engine.
+    Everything the engine reads is reconstructed from the chapter's own data:
+
+      * adjacency (`adj`) from the L1 validity masks — a transition exists only
+        if the seeds contained it (consonants fit as single letters, Doc/3);
+      * skip adjacency (`adj2`) from the L2/L3 masks, so fit 2/3 work;
+      * START/END edges from M1/M2's initial/final columns, edge weights from
+        their medial+final columns (EBoN's own positional frequencies);
+      * prefix/suffix pools from the stored two-element keys;
+      * structures from the frequency table.
+
+    `fit` overrides the chapter's own fit level (clamped to 0..3) when given.
     """
     from .model import Chapter, GenOpts, START, END
 
     d = decode_qch(path)
+    if fit is None:
+        fit = min(max(d.fit, 0), 3)
     ch = Chapter(
         # qch metadata strings: [0]=title [1],[2]=subtitle lines [3]=author/credit.
         # ([4] is a numeric serial, not a date; EBoN does not store DATE in .qch.)
         title=d.title, line1=d.line2, line2=d.line3, author=d.line4,
         opts=GenOpts(structgen=True, statgen=True, fit=fit, val=max(1, d.val),
-                     prefix=bool(d.pre_keys), suffix=bool(d.suf_keys),
+                     prefix=d.prefix_opt and bool(d.pre_keys),
+                     suffix=d.suffix_opt and bool(d.suf_keys),
                      shuffle=d.shuffle),
     )
 
-    # Element pools, weighted by their total fit frequency (row sum of M1/M2).
+    # Element pools, weighted by their total positional frequency (row sum).
     # Element strings are expanded from EBoN's special-letter codes to real
     # letters (soft consonants, SPCCON clusters) so generated names read right.
     cl = d.special_clusters
-    for i, v in enumerate(d.vowel_elements):
-        w = sum(d.M1[i]) if i < len(d.M1) else 0
-        ch.vowel_elements[expand_special(v, cl)] += max(1, w)
-    for i, c in enumerate(d.cons_elements):
-        w = sum(d.M2[i]) if i < len(d.M2) else 0
-        ch.cons_elements[expand_special(c, cl)] += max(1, w)
+    xv = [expand_special(v, cl) for v in d.vowel_elements]
+    xc = [expand_special(c, cl) for c in d.cons_elements]
+    for i, v in enumerate(xv):
+        ch.vowel_elements[v] += max(1, sum(d.M1[i]))
+    for i, c in enumerate(xc):
+        ch.cons_elements[c] += max(1, sum(d.M2[i]))
 
     # Structures from the frequency table (index = EBoN structure number).
     for num, freq in enumerate(d.struct_freq):
@@ -260,41 +336,52 @@ def qch_to_chapter(path: str, fit: int = 1):
         if pat:
             ch.structures[pat] += freq
 
-    # Generic alternating adjacency so the walk can traverse the middle: every
-    # vowel<->consonant transition is allowed, weighted by the target element's
-    # frequency. (EBoN's exact fit matrices constrain this further; frequency
-    # weighting keeps names on-theme without porting the full fit engine.)
-    for v, vw in ch.vowel_elements.items():
-        succ = ch.adj.setdefault(v, Counter())
-        for c, cw in ch.cons_elements.items():
-            succ[c] += cw
-    for c, cw in ch.cons_elements.items():
-        succ = ch.adj.setdefault(c, Counter())
-        for v, vw in ch.vowel_elements.items():
-            succ[v] += vw
+    # Positional weights: column 0 = name-initial, column nV-1 = name-final,
+    # the rest medial. An element's edge weight is its non-initial use, so
+    # initial-only elements are reachable only through START/prefix.
+    li = LETTER_INDEX
+    v_mid = [sum(row[1:]) for row in d.M1]
+    c_mid = [sum(row[1:]) for row in d.M2]
 
-    # Prefix keys: authentic openers. Seed START edges and reinforce the first
-    # transition; also record the pool for future prefix-forcing.
+    # START/END sentinels straight from the positional columns: every element
+    # that ever began a seed name may begin one (weight = how often), and only
+    # elements that ended one satisfy the generator's is_last check.
+    for elems, M, mids in ((xv, d.M1, v_mid), (xc, d.M2, c_mid)):
+        for i, e in enumerate(elems):
+            if M[i][0]:
+                ch.adj.setdefault(START, Counter())[e] += M[i][0]
+            if M[i][d.nV - 1]:
+                ch.adj.setdefault(e, Counter())[END] += M[i][d.nV - 1]
+
+    # L1 adjacency from the validity masks (indexed [next][prev]; consonant
+    # clusters key by their boundary letter facing the transition).
+    for j, v in enumerate(xv):
+        for i, c in enumerate(xc):
+            raw = d.cons_elements[i]
+            if c_mid[i] and (li.get(raw[0]), j) in d.mask_vc:
+                ch.adj.setdefault(v, Counter())[c] += c_mid[i]
+            if v_mid[j] and (j, li.get(raw[-1])) in d.mask_cv:
+                ch.adj.setdefault(c, Counter())[v] += v_mid[j]
+
+    # L2/L3 skip adjacency -> adj2, which fit 2/3 and the back-off engine read.
+    for i, c1 in enumerate(xc):
+        last = li.get(d.cons_elements[i][-1])
+        for k, c2 in enumerate(xc):
+            if c_mid[k] and (li.get(d.cons_elements[k][0]), last) in d.mask_cc:
+                ch.adj2.setdefault(c1, Counter())[c2] += c_mid[k]
+    for j, v1 in enumerate(xv):
+        for k, v2 in enumerate(xv):
+            if v_mid[k] and (k, j) in d.mask_vv:
+                ch.adj2.setdefault(v1, Counter())[v2] += v_mid[k]
+
+    # Prefix/suffix pools: authentic two-element openers/closers.
     for key, freq in zip(d.pre_keys, d.pre_freq):
         (_ca, ea), (_cb, eb) = d.resolve_key(key)
-        if not ea or not eb:
-            continue
-        ea, eb = expand_special(ea, cl), expand_special(eb, cl)
-        w = max(1, freq)
-        ch.prefixes[(ea, eb)] += w
-        ch.adj.setdefault(START, Counter())[ea] += w
-        ch.adj.setdefault(ea, Counter())[eb] += w
-
-    # Suffix keys: authentic closers. Only elements that really ended a name get
-    # an ->END edge, so the generator's is_last check ends names correctly.
+        if ea and eb:
+            ch.prefixes[(expand_special(ea, cl), expand_special(eb, cl))] += max(1, freq)
     for key, freq in zip(d.suf_keys, d.suf_freq):
         (_ca, ea), (_cb, eb) = d.resolve_key(key)
-        if not ea or not eb:
-            continue
-        ea, eb = expand_special(ea, cl), expand_special(eb, cl)
-        w = max(1, freq)
-        ch.suffixes[(ea, eb)] += w
-        ch.adj.setdefault(ea, Counter())[eb] += w
-        ch.adj.setdefault(eb, Counter())[END] += w
+        if ea and eb:
+            ch.suffixes[(expand_special(ea, cl), expand_special(eb, cl))] += max(1, freq)
 
     return ch, d

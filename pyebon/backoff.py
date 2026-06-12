@@ -16,14 +16,18 @@ A `temperature` knob trades typicality for novelty: <1 sharpens toward common
 choices (safe, repetitive), 1 samples in proportion to the data, >1 flattens
 toward rarer choices (varied, wilder).
 
-When a chapter carries no higher-order data -- the .qch-derived library books,
-which only store order-1 adjacency -- the model gracefully degrades to order 1,
-i.e. the same adjacency the fit:1 walk uses, still driven by temperature.
+When a chapter carries no stored higher-order data, an order-2 distribution is
+synthesized on the fly from the skip adjacency (`adj2`) when present -- the
+next element must follow the previous one (`adj`) AND be a seen skip-neighbor
+of the one before that, which is exactly what the fit:2/3 walk enforces. The
+.qch-derived library books carry mask-derived adj/adj2, so they get real
+order-2 behavior; with no adj2 either, the model degrades to order 1.
 """
 
 from __future__ import annotations
 
 import random
+from collections import Counter
 from typing import List, Optional
 
 from .model import Chapter, START, END, MAX_ORDER
@@ -50,9 +54,24 @@ class BackoffGenerator:
         for length in range(hi, 0, -1):
             ctx = tuple(full[-length:])
             table = self.ch.successors(ctx[0]) if length == 1 else self.ch.ngram(ctx)
+            if not table and length == 2 and not self.ch.ngrams:
+                table = self._synth2(ctx)
             if table:
                 return table
         return None
+
+    def _synth2(self, ctx):
+        """Order-2 distribution from adj constrained by adj2 (chapters that
+        store no ngrams, e.g. the .qch-derived library books): the next element
+        must follow ctx[1] and be a seen skip-neighbor of ctx[0]. END passes on
+        the adjacency alone (adj2 holds no sentinels)."""
+        succ = self.ch.successors(ctx[1])
+        skip = self.ch.successors2(ctx[0])
+        if not succ or not skip:
+            return None
+        table = Counter({e: w for e, w in succ.items()
+                         if e == END or skip.get(e, 0) > 0})
+        return table or None
 
     def _sample(self, table):
         inv = 1.0 / self.temp

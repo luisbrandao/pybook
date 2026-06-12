@@ -55,7 +55,8 @@ class Generator:
         self.ch = chapter
         self.rng = random.Random(seed)
         # Skip-level (fit 2/3) checks only apply when the chapter actually has
-        # distance-2 data; .qch-derived chapters don't, so they stay at fit:1.
+        # distance-2 data (seed-built, distilled, and .qch-bridged chapters all
+        # carry it; only minimal hand-made chapters may not).
         self.has_adj2 = bool(getattr(chapter, "adj2", None))
 
     # --- helpers ---------------------------------------------------------- #

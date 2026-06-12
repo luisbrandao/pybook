@@ -348,7 +348,7 @@ def extract_all(ebon_root: str = "Ebon", out_dir: str = LIBRARY_DIR) -> List[str
             done.add(out)
             continue
         try:
-            ch, _ = qch_to_chapter(src, fit=1)
+            ch, _ = qch_to_chapter(src)
         except Exception as e:
             print(f"  skip {src}: {e}", file=sys.stderr)
             continue
