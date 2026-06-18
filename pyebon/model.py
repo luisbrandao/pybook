@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 # Sentinel nodes for the adjacency graph.
 START = "\x02"  # marks "beginning of name"
@@ -46,15 +46,14 @@ class GenOpts:
     def parse(cls, genopt: str) -> "GenOpts":
         """Parse a GENOPT string like 'structgen, statgen, fit:3, val:2, suffix'."""
         o = cls(structgen=False, statgen=False, fit=3, val=2)
-        seen_struct = seen_stat = False
         for tok in genopt.replace("\n", " ").split(","):
             tok = tok.strip().lower()
             if not tok:
                 continue
             if tok == "structgen":
-                o.structgen = True; seen_struct = True
+                o.structgen = True
             elif tok == "statgen":
-                o.statgen = True; seen_stat = True
+                o.statgen = True
             elif tok == "shuffle":
                 o.shuffle = True
             elif tok == "prefix":
@@ -179,9 +178,3 @@ class Chapter:
 
     def successors2(self, a: str) -> Counter:
         return self.adj2.get(a, Counter())
-
-    @staticmethod
-    def is_vowel_element(elem: str) -> bool:
-        """An element's category is fixed at split time; we tag by sentinel-free
-        lookup elsewhere, but for convenience callers may pass category in."""
-        raise NotImplementedError  # category is tracked by the caller, see generate.py

@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 # EBoN's internal consonant-letter table (EBoN.exe @0x92b84). The fit masks'
 # 64-wide letter axis is a character's index in this string: 0-19 plain
@@ -346,7 +346,7 @@ def qch_to_chapter(path: str, fit: int | None = None):
     # START/END sentinels straight from the positional columns: every element
     # that ever began a seed name may begin one (weight = how often), and only
     # elements that ended one satisfy the generator's is_last check.
-    for elems, M, mids in ((xv, d.M1, v_mid), (xc, d.M2, c_mid)):
+    for elems, M in ((xv, d.M1), (xc, d.M2)):
         for i, e in enumerate(elems):
             if M[i][0]:
                 ch.adj.setdefault(START, Counter())[e] += M[i][0]

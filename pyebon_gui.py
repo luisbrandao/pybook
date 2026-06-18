@@ -15,7 +15,6 @@ Stdlib only (Tkinter); no external dependencies.
 
 from __future__ import annotations
 
-import os
 import pathlib
 import re
 import tkinter as tk
@@ -400,7 +399,6 @@ class App(tk.Tk):
         entry.insert(0, text); entry.config(foreground=self.MUTED)
         entry.bind("<FocusIn>", on_focus_in)
         entry.bind("<FocusOut>", on_focus_out)
-        self._ph_text = text
 
     # ---- books column --------------------------------------------------- #
     def _refresh_books(self):
@@ -548,7 +546,6 @@ class App(tk.Tk):
             return
 
         # Optional blend with a second chapter (weighted by the "primary %").
-        blended = False
         bsel = self.blend_var.get()
         if bsel and bsel != self.NO_BLEND and bsel in self._blend_index:
             bkind, bpath = self._blend_index[bsel]
@@ -561,7 +558,6 @@ class App(tk.Tk):
             ptitle, btitle = (ch.title or label), (bch.title or bsel)
             ch = blend_chapters([(ch, p), (bch, 1 - p)],
                                 title=f"{int(p * 100)}% {ptitle} + {int((1 - p) * 100)}% {btitle}")
-            blended = True
 
         ch.opts.fit = int(self.fit_var.get()[0])
         ch.opts.prefix = self.use_prefix.get()

@@ -12,12 +12,11 @@ Run `python -m pyebon.library extract` once to build the data/library/ folder.
 """
 
 import argparse
-import os
 import sys
 
 from .ebn import load_ebn
 from .generate import GenerationError, make_generator
-from .library import LIBRARY_DIR, load_chapter, find_chapter
+from .library import load_chapter, find_chapter
 
 
 def main(argv=None):
