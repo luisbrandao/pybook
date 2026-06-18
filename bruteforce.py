@@ -34,7 +34,7 @@ def gen_chapter(job):
             names.append(g.generate(2, 30))
         except GenerationError:
             fails += 1
-            if fails > 200:        # chapter is too constrained to keep going
+            if fails > 50:        # chapter is too constrained to keep going
                 break
 
     safe_book = book_id.replace(os.sep, "_")
@@ -55,7 +55,7 @@ def main():
           f"on {os.cpu_count()} workers", file=sys.stderr)
 
     done = 0
-    with Pool(os.cpu_count()) as pool:
+    with Pool(os.cpu_count() // 2) as pool:
         for stem, book_id, n, err in pool.imap_unordered(gen_chapter, jobs):
             done += 1
             note = f"  [{err}]" if err else ""
